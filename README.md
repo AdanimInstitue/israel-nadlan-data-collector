@@ -1,7 +1,7 @@
 # israel-rent-data-collector
 
 Collects official Israeli rental-price benchmarks from government and public sources,
-producing a clean `(city, room_count) → median_rent_NIS` table for use in normative-rent
+producing a clean `(city, room_count) → rent_benchmark_NIS` table for use in normative-rent
 calculations for out-of-home welfare care facilities.
 
 ## Purpose
@@ -16,7 +16,7 @@ See [`docs/sources.md`](docs/sources.md) for the full annotated inventory. In pr
 
 | Priority | Source | What we get |
 |----------|--------|------------|
-| 1 | nadlan.gov.il JSON API | Median rent by locality + room group (quarterly) |
+| 1 | nadlan.gov.il JSON API | Locality + room-group rent observations, currently average-oriented in the live payload shape |
 | 2 | CBS REST API (`api.cbs.gov.il`) | Average rent by district/city + room group |
 | 3 | CBS Table 4.9 PDF | Average rent cross-check |
 | 4 | BoI hedonic model | Model-based fallback for localities with no data |
@@ -31,13 +31,18 @@ Running the pipeline produces `data/output/rent_benchmarks.csv`:
 
 ```
 locality_code, locality_name_he, locality_name_en, room_group,
-median_rent_nis, avg_rent_nis, source, quarter, year
+median_rent_nis, avg_rent_nis, rent_nis, source, quarter, year,
+observations_count, notes
 ```
 
 And `data/output/locality_crosswalk.csv`:
 ```
-locality_code, locality_name_he, locality_name_en, district, sub_district
+locality_code, locality_name_he, locality_name_en, district_he, district_en,
+population_approx, source
 ```
+
+These snippets reflect the current published CSV columns. For the full maintained schema,
+see [`docs/02_output_datasets_schema.md`](docs/02_output_datasets_schema.md).
 
 ## Installation
 
@@ -82,10 +87,9 @@ src/rent_collector/
 │   ├── cbs_table49.py       # CBS Table 4.9 PDF/Excel download + parse
 │   ├── data_gov_il.py       # data.gov.il CKAN API wrapper
 │   ├── boi_hedonic.py       # Bank of Israel hedonic regression model
-│   └── locality_registry.py # CBS locality code registry
 └── utils/
     ├── http_client.py       # Rate-limited HTTP client with retries
-    └── locality_crosswalk.py# Locality code → city name crosswalk
+    └── locality_crosswalk.py# Locality code registry and city-name crosswalk
 data/
 ├── locality_codes_seed.csv  # Seed data for ~50 major cities (offline fallback)
 └── output/                  # Generated output (gitignored)

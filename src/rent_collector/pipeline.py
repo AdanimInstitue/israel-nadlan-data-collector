@@ -6,7 +6,8 @@ Orchestrates all collectors in priority order, merges results, deduplicates
 
 Priority order (higher = preferred when same locality+room_group exists in
 multiple sources):
-  1. nadlan.gov.il    (median rent; most granular)
+  1. nadlan.gov.il    (most granular locality+room observations; live payload is
+                       currently average-oriented rather than median-oriented)
   2. CBS Table 4.9    (average rent; official cross-check)
   3. CBS API          (average rent; national indices)
   4. BoI hedonic      (modelled fallback)
