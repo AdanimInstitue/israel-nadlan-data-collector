@@ -67,8 +67,8 @@ NADLAN_RENT_ENDPOINTS: list[str] = [
     "PROXY:/api/settlement/{id}/rent",
     "PROXY:/RentBySettlement",
     # Patterns 1-4: fallback to main domain
-    "/api/getRentsBySettlement",           # pattern 1
-    "/api/settlement/{id}/rent",           # pattern 2 (RESTful)
+    "/api/getRentsBySettlement",  # pattern 1
+    "/api/settlement/{id}/rent",  # pattern 2 (RESTful)
     "/api/RentAnalysis/GetRentBySettlement",  # pattern 3 (action-based)
     "/NadlanAPI/GetRentBySettlementCode",  # pattern 4 (older style)
 ]
@@ -102,8 +102,7 @@ CBS_TABLE49_URL_TEMPLATE: str = (
     "/{year}/price{month:02d}{letter}/a4_9_e.xlsx"
 )
 CBS_TABLE49_PDF_URL_TEMPLATE: str = (
-    "https://www.cbs.gov.il/he/publications/Madad/DocLib"
-    "/{year}/price{month:02d}{letter}/a4_9_e.pdf"
+    "https://www.cbs.gov.il/he/publications/Madad/DocLib/{year}/price{month:02d}{letter}/a4_9_e.pdf"
 )
 
 # Most recent known publication (update when CBS releases a new one)

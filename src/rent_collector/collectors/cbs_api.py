@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 import xml.etree.ElementTree as ET
-from typing import Iterator
+from collections.abc import Iterator
 
 from rich.console import Console
 
@@ -195,7 +195,6 @@ class CBSApiCollector(BaseCollector):
 
     def probe(self) -> dict[str, object]:
         client = get_client()
-        url = f"{CBS_API_BASE_URL}/index/data/price"
         try:
             resp = client.get(
                 f"{CBS_API_BASE_URL}/Index/Catalog/Catalog",
@@ -253,8 +252,7 @@ def _parse_cbs_series(
     for row in rows:
         # Try to extract period
         period_raw = (
-            row.get("period") or row.get("Period")
-            or row.get("date") or row.get("Date") or ""
+            row.get("period") or row.get("Period") or row.get("date") or row.get("Date") or ""
         )
         year, quarter = _parse_period(str(period_raw))
 
@@ -273,19 +271,29 @@ def _parse_cbs_series(
 
         # Try to extract room group
         room_raw = (
-            row.get("rooms") or row.get("Rooms") or row.get("roomGroup")
-            or row.get("numRooms") or row.get("description") or ""
+            row.get("rooms")
+            or row.get("Rooms")
+            or row.get("roomGroup")
+            or row.get("numRooms")
+            or row.get("description")
+            or ""
         )
         room_group = _extract_room_group_from_label(str(room_raw))
 
         # Try to extract locality
         code_raw = (
-            row.get("localityCode") or row.get("settlementCode")
-            or row.get("cityCode") or row.get("areaCode") or ""
+            row.get("localityCode")
+            or row.get("settlementCode")
+            or row.get("cityCode")
+            or row.get("areaCode")
+            or ""
         )
         name_raw = (
-            row.get("locality") or row.get("city") or row.get("area")
-            or row.get("description") or ""
+            row.get("locality")
+            or row.get("city")
+            or row.get("area")
+            or row.get("description")
+            or ""
         )
 
         if code_raw:

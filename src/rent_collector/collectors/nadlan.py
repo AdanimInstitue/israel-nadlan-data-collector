@@ -28,7 +28,8 @@ EXECUTOR NOTE (for Codex):
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import requests
 from rich.console import Console
@@ -127,9 +128,7 @@ class NadlanCollector(BaseCollector):
                     try:
                         data = resp.json()
                         if _looks_like_rent_data(data):
-                            console.log(
-                                f"[green]nadlan endpoint found:[/green] {url_path}"
-                            )
+                            console.log(f"[green]nadlan endpoint found:[/green] {url_path}")
                             self._active_endpoint = pattern
                             return pattern
                         else:
@@ -143,15 +142,11 @@ class NadlanCollector(BaseCollector):
                             f"failed: {parse_exc}[/yellow]"
                         )
                 else:
-                    console.log(
-                        f"[dim]Endpoint {url_path}: HTTP {resp.status_code}[/dim]"
-                    )
+                    console.log(f"[dim]Endpoint {url_path}: HTTP {resp.status_code}[/dim]")
             except requests.RequestException as exc:
                 console.log(f"[dim]Endpoint {url_path}: {exc}[/dim]")
 
-        console.log(
-            "[red]All nadlan API endpoints failed. Will try HTML fallback.[/red]"
-        )
+        console.log("[red]All nadlan API endpoints failed. Will try HTML fallback.[/red]")
         return None
 
     # ------------------------------------------------------------------
@@ -187,26 +182,20 @@ class NadlanCollector(BaseCollector):
                 if not observations:
                     logger.debug("No data for locality %s (%s)", code, locality.name_he)
             except Exception as exc:
-                logger.warning(
-                    "Failed to fetch locality %s (%s): %s", code, locality.name_he, exc
-                )
+                logger.warning("Failed to fetch locality %s (%s): %s", code, locality.name_he, exc)
 
     # ------------------------------------------------------------------
     # Per-locality fetch
     # ------------------------------------------------------------------
 
-    def _fetch_locality(
-        self, code: str, name_he: str, name_en: str
-    ) -> Iterator[RentObservation]:
+    def _fetch_locality(self, code: str, name_he: str, name_en: str) -> Iterator[RentObservation]:
         """Fetch and parse rent data for a single locality."""
         if self._active_endpoint:
             yield from self._fetch_via_api(code, name_he, name_en)
         else:
             yield from self._fetch_via_html(code, name_he, name_en)
 
-    def _fetch_via_api(
-        self, code: str, name_he: str, name_en: str
-    ) -> Iterator[RentObservation]:
+    def _fetch_via_api(self, code: str, name_he: str, name_en: str) -> Iterator[RentObservation]:
         pattern = self._active_endpoint
         assert pattern is not None
         url_path = pattern.replace("{id}", code).replace("PROXY:", "")
@@ -226,9 +215,7 @@ class NadlanCollector(BaseCollector):
 
         yield from _parse_response(data, code, name_he, name_en)
 
-    def _fetch_via_html(
-        self, code: str, name_he: str, name_en: str
-    ) -> Iterator[RentObservation]:
+    def _fetch_via_html(self, code: str, name_he: str, name_en: str) -> Iterator[RentObservation]:
         """
         Fallback: parse the public rental-trends HTML page for a locality.
 
@@ -242,9 +229,10 @@ class NadlanCollector(BaseCollector):
             https://www.nadlan.gov.il/?id=5000&page=rent&view=settlement_rent
         and update _parse_html_page() accordingly.
         """
-        from bs4 import BeautifulSoup
         import json
         import re
+
+        from bs4 import BeautifulSoup
 
         url = f"{NADLAN_BASE_URL}/?id={code}&page=rent&view=settlement_rent"
         client = get_client()
@@ -274,7 +262,11 @@ class NadlanCollector(BaseCollector):
         for script in soup.find_all("script"):
             text = script.string or ""
             # Look for JSON-like objects containing rent data
-            match = re.search(r"window\.__(?:DATA|APP_STATE|RENT_DATA)__\s*=\s*(\{.*?\});", text, re.DOTALL)
+            match = re.search(
+                r"window\.__(?:DATA|APP_STATE|RENT_DATA)__\s*=\s*(\{.*?\});",
+                text,
+                re.DOTALL,
+            )
             if match:
                 try:
                     blob = json.loads(match.group(1))
@@ -313,6 +305,7 @@ def _base_url_for_pattern(pattern: str) -> str:
     if pattern.startswith("/pages/"):
         return NADLAN_DATA_BASE_URL
     from rent_collector.config import NADLAN_PROXY_BASE_URL
+
     if pattern.startswith("PROXY:"):
         return NADLAN_PROXY_BASE_URL
     return NADLAN_BASE_URL
@@ -371,7 +364,7 @@ def _looks_like_rent_data(data: Any) -> bool:
         trends = data.get("trends")
         if isinstance(trends, dict) and isinstance(trends.get("rooms"), list):
             return True
-    if not isinstance(data, (dict, list)):
+    if not isinstance(data, dict | list):
         return False
     text = str(data).lower()
     # Look for Hebrew or English rent-related keywords
@@ -379,9 +372,7 @@ def _looks_like_rent_data(data: Any) -> bool:
     return any(k in text for k in rent_keywords) and len(text) > 50
 
 
-def _parse_response(
-    data: Any, code: str, name_he: str, name_en: str
-) -> Iterator[RentObservation]:
+def _parse_response(data: Any, code: str, name_he: str, name_en: str) -> Iterator[RentObservation]:
     """
     Parse a JSON response from nadlan.gov.il into RentObservation instances.
 
@@ -413,10 +404,13 @@ def _parse_response(
                 if room_group is None:
                     continue
                 summary = item.get("summary") if isinstance(item.get("summary"), dict) else {}
-                graph_data = item.get("graphData") if isinstance(item.get("graphData"), list) else []
+                graph_data = (
+                    item.get("graphData") if isinstance(item.get("graphData"), list) else []
+                )
                 point = next(
                     (
-                        row for row in graph_data
+                        row
+                        for row in graph_data
                         if isinstance(row, dict) and row.get("settlementPrice")
                     ),
                     None,
@@ -478,11 +472,20 @@ def _parse_response(
                     if room_group is None:
                         continue
                     median = _extract_price(stats, ["median", "medianPrice", "medianRent"])
-                    avg = _extract_price(stats, ["average", "avg", "avgPrice", "avgRent", "meanRent"])
+                    avg = _extract_price(
+                        stats, ["average", "avg", "avgPrice", "avgRent", "meanRent"]
+                    )
                     if median is None and avg is None:
                         continue
                     yield _make_observation(
-                        code, name_he, name_en, room_group, median, avg, year, quarter,
+                        code,
+                        name_he,
+                        name_en,
+                        room_group,
+                        median,
+                        avg,
+                        year,
+                        quarter,
                         count=stats.get("count") or stats.get("numTransactions"),
                     )
                 return
@@ -548,8 +551,15 @@ def _item_to_observation(
     count = item.get("count") or item.get("numTransactions") or item.get("transactions")
 
     return _make_observation(
-        code, name_he, name_en, room_group, median, avg,
-        int(obs_year), int(obs_quarter), count=count,
+        code,
+        name_he,
+        name_en,
+        room_group,
+        median,
+        avg,
+        int(obs_year),
+        int(obs_quarter),
+        count=count,
     )
 
 

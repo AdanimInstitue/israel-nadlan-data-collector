@@ -85,6 +85,7 @@ def main(
         sys.exit(0 if ok_count > 0 else 1)
 
     from pathlib import Path
+
     from rent_collector.pipeline import run_pipeline
 
     sources_list = list(source) if source else None  # None = all

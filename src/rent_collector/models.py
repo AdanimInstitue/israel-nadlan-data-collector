@@ -5,10 +5,8 @@ Shared data models for the rent collector.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ---------------------------------------------------------------------------
 # Enumerations
@@ -45,7 +43,7 @@ class RoomGroup(str, Enum):
     R5_PLUS = "5+"
 
     @classmethod
-    def from_float(cls, value: float) -> "RoomGroup":
+    def from_float(cls, value: float) -> RoomGroup:
         """Convert a numeric value to a RoomGroup, rounding to nearest 0.5."""
         rounded = round(value * 2) / 2
         key = f"{rounded:.1f}" if rounded < 5 else "5+"
@@ -69,16 +67,12 @@ class RentObservation(BaseModel):
     locality_code: str = Field(
         description="CBS 4-digit locality code (מספר ישוב). E.g. '5000' for Tel Aviv."
     )
-    locality_name_he: str = Field(
-        description="Locality name in Hebrew. E.g. 'תל אביב-יפו'."
-    )
+    locality_name_he: str = Field(description="Locality name in Hebrew. E.g. 'תל אביב-יפו'.")
     locality_name_en: str = Field(
         default="",
         description="Locality name in English (transliterated). E.g. 'Tel Aviv-Yafo'.",
     )
-    room_group: RoomGroup = Field(
-        description="Apartment room-count category (Israeli convention)."
-    )
+    room_group: RoomGroup = Field(description="Apartment room-count category (Israeli convention).")
     median_rent_nis: float | None = Field(
         default=None,
         description="Median monthly rent in NIS. Available from nadlan.gov.il.",
@@ -88,9 +82,7 @@ class RentObservation(BaseModel):
         description="Average monthly rent in NIS. Available from CBS Table 4.9 / API.",
     )
     rent_nis: float = Field(
-        description=(
-            "Best available rent estimate in NIS: median if available, else average."
-        )
+        description=("Best available rent estimate in NIS: median if available, else average.")
     )
     source: DataSource = Field(description="Which collector produced this observation.")
     quarter: int | None = Field(
@@ -133,9 +125,7 @@ class Locality(BaseModel):
     name_he: str = Field(description="Hebrew name.")
     name_en: str = Field(default="", description="English transliteration.")
     district_he: str = Field(default="", description="District (מחוז) in Hebrew.")
-    sub_district_he: str = Field(
-        default="", description="Sub-district (נפה) in Hebrew."
-    )
+    sub_district_he: str = Field(default="", description="Sub-district (נפה) in Hebrew.")
     population: int | None = Field(default=None)
     is_municipal_authority: bool = Field(default=False)
 
@@ -178,7 +168,5 @@ class BoIHedonicCoefficients(BaseModel):
     reference_city_code: str = Field(
         default="5000", description="CBS code of the reference city (coefficient = 0)."
     )
-    reference_year: int = Field(
-        default=2015, description="Year the regression was estimated."
-    )
+    reference_year: int = Field(default=2015, description="Year the regression was estimated.")
     paper_url: str = Field(default="", description="Source paper URL.")

@@ -143,7 +143,7 @@ class RateLimitedSession:
     def close(self) -> None:
         self._session.close()
 
-    def __enter__(self) -> "RateLimitedSession":
+    def __enter__(self) -> RateLimitedSession:
         return self
 
     def __exit__(self, *_: Any) -> None:

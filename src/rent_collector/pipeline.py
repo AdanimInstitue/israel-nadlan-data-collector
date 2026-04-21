@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterator
 
 import pandas as pd
 from rich.console import Console
@@ -105,15 +104,15 @@ def run_pipeline(
         try:
             obs_list = list(collector.collect())
             all_observations.extend(obs_list)
-            console.log(
-                f"  [green]{source_name}:[/green] {len(obs_list):,} observations"
-            )
+            console.log(f"  [green]{source_name}:[/green] {len(obs_list):,} observations")
         except Exception as exc:
             logger.error("%s collector failed: %s", source_name, exc, exc_info=True)
             console.log(f"  [red]{source_name} FAILED: {exc}[/red]")
 
     if not all_observations:
-        console.log("[red]No observations collected. Check connectivity and endpoint configuration.[/red]")
+        console.log(
+            "[red]No observations collected. Check connectivity and endpoint configuration.[/red]"
+        )
         return pd.DataFrame()
 
     # ------------------------------------------------------------------
@@ -180,9 +179,7 @@ def _merge_observations(observations: list[RentObservation]) -> pd.DataFrame:
 
     # Add priority column for sorting (lower = better)
     priority_map = {src: i for i, src in enumerate(SOURCE_PRIORITY)}
-    df["_priority"] = df["source"].map(
-        lambda s: priority_map.get(DataSource(s), 99)
-    )
+    df["_priority"] = df["source"].map(lambda s: priority_map.get(DataSource(s), 99))
 
     # Sort by priority so best rows come first
     df = df.sort_values("_priority")

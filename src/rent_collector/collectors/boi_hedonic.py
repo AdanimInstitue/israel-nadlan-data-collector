@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Iterator
+from collections.abc import Iterator
 
 from rich.console import Console
 
@@ -72,7 +72,7 @@ _PLACEHOLDER_COEFFICIENTS = BoIHedonicCoefficients(
     #   beta_rooms ~= 0.1574
     intercept=6.8650,
     beta_rooms=0.1574,
-    beta_floor_area=None,    # floor area not used in our simplified model
+    beta_floor_area=None,  # floor area not used in our simplified model
     beta_floor_number=None,
     beta_building_age=None,
     city_effects={
@@ -81,7 +81,7 @@ _PLACEHOLDER_COEFFICIENTS = BoIHedonicCoefficients(
         # differentials relative to Tel Aviv to keep the fallback useful.
         "3000": -0.3837,
         "4000": -0.8854,
-        "5000":  0.00,   # Tel Aviv (reference)
+        "5000": 0.00,  # Tel Aviv (reference)
         "6100": -0.5533,
         "6200": -0.5642,
         "6300": -0.2467,
@@ -160,7 +160,9 @@ class BoIHedonicCollector(BaseCollector):
         # Calibrate absolute level: adjust so TA 3-room matches reference
         ta_3room_log = self._coef.intercept + self._coef.beta_rooms * 3.0  # TA effect = 0
         ta_3room_2015 = math.exp(ta_3room_log)
-        calibration_factor = (TEL_AVIV_3ROOM_REFERENCE_NIS / RENT_INFLATION_2015_TO_2025) / ta_3room_2015
+        calibration_factor = (
+            TEL_AVIV_3ROOM_REFERENCE_NIS / RENT_INFLATION_2015_TO_2025
+        ) / ta_3room_2015
 
         rent_2015_calibrated = rent_2015 * calibration_factor
         rent_2025 = rent_2015_calibrated * RENT_INFLATION_2015_TO_2025
@@ -180,8 +182,14 @@ class BoIHedonicCollector(BaseCollector):
 
         crosswalk = get_crosswalk()
         room_groups = [
-            RoomGroup.R2_0, RoomGroup.R2_5, RoomGroup.R3_0, RoomGroup.R3_5,
-            RoomGroup.R4_0, RoomGroup.R4_5, RoomGroup.R5_0, RoomGroup.R5_PLUS,
+            RoomGroup.R2_0,
+            RoomGroup.R2_5,
+            RoomGroup.R3_0,
+            RoomGroup.R3_5,
+            RoomGroup.R4_0,
+            RoomGroup.R4_5,
+            RoomGroup.R5_0,
+            RoomGroup.R5_PLUS,
         ]
 
         for locality in crosswalk.all_localities():
@@ -216,10 +224,7 @@ class BoIHedonicCollector(BaseCollector):
         client = get_client()
         try:
             content = client.get_bytes(BOI_HEDONIC_PAPER_URL)
-            console.log(
-                f"[green]BoI hedonic paper downloaded "
-                f"({len(content):,} bytes)[/green]"
-            )
+            console.log(f"[green]BoI hedonic paper downloaded ({len(content):,} bytes)[/green]")
             return content
         except Exception as exc:
             logger.error("BoI paper download failed: %s", exc)

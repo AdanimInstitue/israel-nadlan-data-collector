@@ -18,12 +18,15 @@ from __future__ import annotations
 import csv
 import logging
 from functools import lru_cache
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from rent_collector.config import DATAGOV_API_BASE, LOCALITY_REGISTRY_RESOURCE_ID, SEED_LOCALITIES_CSV
+from rent_collector.config import (
+    DATAGOV_API_BASE,
+    LOCALITY_REGISTRY_RESOURCE_ID,
+    SEED_LOCALITIES_CSV,
+)
 from rent_collector.models import Locality
 
 if TYPE_CHECKING:
@@ -39,9 +42,7 @@ class LocalityCrosswalk:
     def __init__(self, localities: list[Locality]) -> None:
         self._by_code: dict[str, Locality] = {loc.code: loc for loc in localities}
         # Also index by Hebrew name (normalised: strip whitespace, lower)
-        self._by_name_he: dict[str, Locality] = {
-            loc.name_he.strip(): loc for loc in localities
-        }
+        self._by_name_he: dict[str, Locality] = {loc.name_he.strip(): loc for loc in localities}
 
     # ------------------------------------------------------------------
     # Lookups
@@ -74,7 +75,7 @@ class LocalityCrosswalk:
     # ------------------------------------------------------------------
 
     @classmethod
-    def load(cls, *, force_seed: bool = False) -> "LocalityCrosswalk":
+    def load(cls, *, force_seed: bool = False) -> LocalityCrosswalk:
         """
         Build the crosswalk.
 
@@ -96,9 +97,7 @@ class LocalityCrosswalk:
                 )
 
         localities = _load_seed_csv()
-        console.log(
-            f"[yellow]Using seed locality CSV ({len(localities)} entries).[/yellow]"
-        )
+        console.log(f"[yellow]Using seed locality CSV ({len(localities)} entries).[/yellow]")
         return cls(localities)
 
 
@@ -151,12 +150,7 @@ def _fetch_from_datagov() -> list[Locality]:
             or rec.get("yishuv_name_english")
             or ""
         )
-        district_he = (
-            rec.get("שם_מחוז")
-            or rec.get("district_name")
-            or rec.get("MACHOZ")
-            or ""
-        )
+        district_he = rec.get("שם_מחוז") or rec.get("district_name") or rec.get("MACHOZ") or ""
         sub_district_he = rec.get("שם_נפה") or rec.get("NAFA") or ""
         pop = rec.get("סה_כ") or rec.get("total_population") or None
 

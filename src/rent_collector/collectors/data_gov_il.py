@@ -13,13 +13,14 @@ CKAN API base: https://data.gov.il/api/3/action/
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from rich.console import Console
 
 from rent_collector.collectors.base import BaseCollector
 from rent_collector.config import DATAGOV_API_BASE
-from rent_collector.models import DataSource, RentObservation
+from rent_collector.models import RentObservation
 from rent_collector.utils.http_client import get_client
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ def ckan_datastore_search(
     }
     if filters:
         import json
+
         params["filters"] = json.dumps(filters)
     if q:
         params["q"] = q
@@ -100,9 +102,7 @@ def ckan_datastore_search(
     return all_records
 
 
-def ckan_package_search(
-    query: str, *, rows: int = 20
-) -> list[dict]:
+def ckan_package_search(query: str, *, rows: int = 20) -> list[dict]:
     """Search for datasets on data.gov.il."""
     client = get_client()
     url = f"{DATAGOV_API_BASE}/package_search"
@@ -164,22 +164,20 @@ class DataGovILCollector(BaseCollector):
             title = pkg.get("title", "")
             org = (pkg.get("organization") or {}).get("name", "")
             resources = pkg.get("resources", [])
-            console.print(
-                f"  [bold]{title}[/bold] — org: {org} — {len(resources)} resources"
-            )
+            console.print(f"  [bold]{title}[/bold] — org: {org} — {len(resources)} resources")
             for r in resources[:3]:
                 console.print(
-                    f"    [{r.get('format', '?')}] {r.get('name', '')} "
-                    f"| {r.get('url', '')[:70]}"
+                    f"    [{r.get('format', '?')}] {r.get('name', '')} | {r.get('url', '')[:70]}"
                 )
 
         return results
 
     def probe(self) -> dict[str, object]:
         try:
-            records = ckan_datastore_search(
-                KNOWN_RESOURCES["locality_registry"], limit=1
-            )
-            return {"ok": bool(records), "sample_keys": list((records[0] if records else {}).keys())}
+            records = ckan_datastore_search(KNOWN_RESOURCES["locality_registry"], limit=1)
+            return {
+                "ok": bool(records),
+                "sample_keys": list((records[0] if records else {}).keys()),
+            }
         except Exception as exc:
             return {"ok": False, "error": str(exc)}

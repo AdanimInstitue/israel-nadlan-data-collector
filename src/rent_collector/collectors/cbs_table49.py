@@ -26,7 +26,7 @@ from __future__ import annotations
 import io
 import logging
 import re
-from typing import Iterator
+from collections.abc import Iterator
 
 import pandas as pd
 from rich.console import Console
@@ -133,9 +133,9 @@ class CBSTable49Collector(BaseCollector):
 
     def _parse_pdf(self, content: bytes) -> pd.DataFrame:
         """Parse the PDF using pdfplumber."""
-        import pdfplumber  # type: ignore[import]
+        import pdfplumber
 
-        rows: list[list[str]] = []
+        rows: list[list[str | None]] = []
         with pdfplumber.open(io.BytesIO(content)) as pdf:
             for page in pdf.pages:
                 table = page.extract_table()
@@ -144,11 +144,7 @@ class CBSTable49Collector(BaseCollector):
         if not rows:
             raise ValueError("No table found in CBS Table 4.9 PDF.")
 
-        df = pd.DataFrame(rows)
-        header_row = _find_header_row(df)
-        if header_row is None:
-            raise ValueError("Could not find header row in PDF table.")
-        return _reshape_table49(df, header_row)
+        raise ValueError("CBS Table 4.9 PDF parsing is not implemented for the current layout.")
 
     # ------------------------------------------------------------------
     # Collection
@@ -156,7 +152,9 @@ class CBSTable49Collector(BaseCollector):
 
     def collect(self) -> Iterator[RentObservation]:
         if self.dry_run:
-            console.log(f"[dim][dry-run] Would download CBS Table 4.9 from {self._excel_url()}[/dim]")
+            console.log(
+                f"[dim][dry-run] Would download CBS Table 4.9 from {self._excel_url()}[/dim]"
+            )
             return
 
         content = self._download_excel()
