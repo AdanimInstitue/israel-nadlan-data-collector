@@ -26,8 +26,12 @@ def test_room_group_from_float_rounds_and_caps() -> None:
     assert RoomGroup.from_float(2.24) == RoomGroup.R2_0
     assert RoomGroup.from_float(2.26) == RoomGroup.R2_5
     assert RoomGroup.from_float(7.0) == RoomGroup.R5_PLUS
-    assert RoomGroup.from_float(0.5) == RoomGroup.R5_PLUS
-    assert RoomGroup.from_float(float("nan")) == RoomGroup.R5_PLUS
+
+    with pytest.raises(ValueError, match="out of supported range"):
+        RoomGroup.from_float(0.5)
+
+    with pytest.raises(ValueError, match="cannot be NaN"):
+        RoomGroup.from_float(float("nan"))
 
 
 def test_rent_observation_prefers_median_then_average() -> None:

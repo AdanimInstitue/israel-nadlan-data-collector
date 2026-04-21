@@ -32,11 +32,11 @@ def _setup_logging(verbose: bool) -> None:
     "--source",
     multiple=True,
     type=click.Choice(
-        ["nadlan", "cbs-api", "cbs-table49", "boi-hedonic", "data-gov-il"],
+        ["all", "nadlan", "cbs-api", "cbs-table49", "boi-hedonic", "data-gov-il"],
         case_sensitive=False,
     ),
     default=[],
-    help="Sources to collect from. Repeat to specify multiple. Default: all.",
+    help="Sources to collect from. Repeat to specify multiple. Use 'all' or omit for all.",
 )
 @click.option("--dry-run", is_flag=True, help="Probe endpoints but don't save output.")
 @click.option("--probe", is_flag=True, help="Probe all endpoints and exit.")
@@ -95,6 +95,8 @@ def main(
     from rent_collector.pipeline import run_pipeline
 
     sources_list = list(source) if source else None  # None = all
+    if sources_list and "all" in sources_list:
+        sources_list = None
 
     try:
         df = run_pipeline(

@@ -47,15 +47,17 @@ class RoomGroup(str, Enum):
 
     @classmethod
     def from_float(cls, value: float) -> RoomGroup:
-        """Convert a numeric value to a RoomGroup, rounding to nearest 0.5."""
+        """Convert a numeric room count to a RoomGroup, rounding to nearest 0.5."""
         if math.isnan(value):
-            return cls.R5_PLUS
+            raise ValueError("Room count cannot be NaN.")
+        if value < 1:
+            raise ValueError(f"Room count out of supported range: {value}.")
         rounded = round(value * 2) / 2
         key = f"{rounded:.1f}" if rounded < 5 else "5+"
         try:
             return cls(key)
         except ValueError:
-            return cls.R5_PLUS
+            raise ValueError(f"Room count out of supported range: {value}.") from None
 
 
 # ---------------------------------------------------------------------------
