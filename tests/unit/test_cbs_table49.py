@@ -38,6 +38,8 @@ def test_latest_column_extract_clean_and_resolve(monkeypatch) -> None:
     assert extracted["avg_rent_nis"].tolist() == [5400.0, 7000.0]
     assert _clean_table49_label("Petah Tiqwa - 7900") == "Petah Tiqwa"
     assert _resolve_table49_location("Tel Aviv - 5000") == ("5000", "Tel Aviv - Yafo")
+    assert _resolve_table49_location("Tel Aviv") == ("5000", "Tel Aviv - Yafo")
+    assert _resolve_table49_location("Beer Sheva") == ("9000", "Beer Sheva")
     assert _resolve_table49_location("South District") == ("DIST_SOUTH", "South District")
 
 
@@ -216,6 +218,7 @@ def test_cbs_table49_parser_and_lookup_branches(monkeypatch) -> None:
     extracted = _extract_table49_entities(df, value_col=1, year=2024, quarter=4)
     assert extracted["city"].tolist() == ["Tel Aviv"]
     assert _resolve_table49_location("תל אביב - יפו - 9999") == ("5000", "Tel Aviv - Yafo")
+    assert _resolve_table49_location("center District") == ("DIST_CENTER", "center District")
 
 
 def test_cbs_table49_collect_skips_blank_city_rows_and_latest_column_branching(monkeypatch) -> None:

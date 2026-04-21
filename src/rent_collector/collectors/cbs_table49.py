@@ -61,6 +61,27 @@ _TABLE49_ROOM_ROWS: dict[str, RoomGroup] = {
     "4.5-6": RoomGroup.R5_PLUS,
 }
 
+_TABLE49_LOCATION_ALIASES: dict[str, str] = {
+    "ashdod": "70",
+    "ashkelon": "7100",
+    "bat yam": "6200",
+    "beer sheva": "9000",
+    "bet shemesh": "2610",
+    "bnei brak": "6100",
+    "hadera": "6500",
+    "haifa": "4000",
+    "herzlliya": "6400",
+    "holon": "6600",
+    "jerusalem": "3000",
+    "kfar saba": "6900",
+    "netanya": "7400",
+    "petah tiqwa": "7900",
+    "ramat gan": "8600",
+    "rehovot": "8400",
+    "rishon lezion": "8300",
+    "tel aviv": "5000",
+}
+
 
 class CBSTable49Collector(BaseCollector):
     """Download and parse CBS Table 4.9 from the monthly CPI publication."""
@@ -300,16 +321,26 @@ def _resolve_table49_location(city_label: str) -> tuple[str, str]:
     loc = crosswalk.by_name(cleaned)
     if loc:
         return loc.code, loc.name_en
+    loc = crosswalk.by_name_en(cleaned)
+    if loc:
+        return loc.code, loc.name_en
+
+    alias_code = _TABLE49_LOCATION_ALIASES.get(cleaned.lower())
+    if alias_code:
+        loc = crosswalk.by_code(alias_code)
+        if loc:
+            return loc.code, loc.name_en
 
     district_map = {
-        "Jerusalem District": "DIST_JER",
-        "North District": "DIST_NORTH",
-        "Haifa District": "DIST_HAIFA",
-        "Center District": "DIST_CENTER",
-        "Tel Aviv District": "DIST_TA",
-        "South District": "DIST_SOUTH",
+        "jerusalem district": "DIST_JER",
+        "north district": "DIST_NORTH",
+        "haifa district": "DIST_HAIFA",
+        "center district": "DIST_CENTER",
+        "tel aviv district": "DIST_TA",
+        "south district": "DIST_SOUTH",
     }
-    if cleaned in district_map:
-        return district_map[cleaned], cleaned
+    district_key = cleaned.lower()
+    if district_key in district_map:
+        return district_map[district_key], cleaned
 
     return f"UNKNOWN_{cleaned}", cleaned

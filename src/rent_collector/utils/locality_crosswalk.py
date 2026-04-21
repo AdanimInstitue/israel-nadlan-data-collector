@@ -41,6 +41,9 @@ class LocalityCrosswalk:
         self._by_name_he: dict[str, Locality] = {
             _normalize_name(loc.name_he): loc for loc in localities
         }
+        self._by_name_en: dict[str, Locality] = {
+            _normalize_name(loc.name_en): loc for loc in localities if loc.name_en
+        }
 
     # ------------------------------------------------------------------
     # Lookups
@@ -61,6 +64,10 @@ class LocalityCrosswalk:
     def by_name(self, name_he: str) -> Locality | None:
         """Fuzzy-ish lookup by locality name after normalising case/spacing."""
         return self._by_name_he.get(_normalize_name(name_he))
+
+    def by_name_en(self, name_en: str) -> Locality | None:
+        """Lookup by English locality name after normalising case/spacing."""
+        return self._by_name_en.get(_normalize_name(name_en))
 
     def all_codes(self) -> list[str]:
         return list(self._by_code.keys())
