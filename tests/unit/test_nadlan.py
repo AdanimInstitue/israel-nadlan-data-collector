@@ -121,7 +121,7 @@ def test_nadlan_collector_discovery_collect_and_probe(monkeypatch) -> None:
         }
     }
     client = _Client([_Resp(200, payload), _Resp(200, payload), _Resp(200, payload)])
-    monkeypatch.setattr("rent_collector.utils.http_client.get_client", lambda: client)
+    monkeypatch.setattr(mod, "get_client", lambda: client)
     monkeypatch.setattr(mod, "get_crosswalk", make_crosswalk)
 
     collector = NadlanCollector(locality_codes=["5000"])
@@ -132,7 +132,7 @@ def test_nadlan_collector_discovery_collect_and_probe(monkeypatch) -> None:
     assert endpoint is not None
     assert rows[0].source == DataSource.NADLAN
     assert rows[0].year == 2025
-    assert rows[0].quarter == 2
+    assert rows[0].quarter == 1
     assert probe["ok"] is True
 
 

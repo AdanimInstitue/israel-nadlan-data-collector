@@ -132,7 +132,7 @@ def test_save_crosswalk_matches_documented_schema(tmp_path: Path) -> None:
     ]
 
 
-def test_validate_reports_informational_baseline_and_bounds(capsys) -> None:
+def test_validate_reports_reference_baseline_and_bounds(capsys) -> None:
     df = pd.DataFrame(
         [
             {"locality_code": "5000", "source": DataSource.NADLAN.value, "rent_nis": 7999},
@@ -143,9 +143,21 @@ def test_validate_reports_informational_baseline_and_bounds(capsys) -> None:
     _validate(df, expected_total_2022=131_000_000)
     output = capsys.readouterr().out
 
-    assert "informational only" in output
+    assert "Annualised row-sum (informational only)" in output
     assert "not directly comparable" in output
+    assert "2022 reference baseline retained for context" in output
     assert "Rent bounds check passed" in output
+
+
+def test_validate_logs_zero_reference_baseline(capsys) -> None:
+    df = pd.DataFrame(
+        [{"locality_code": "5000", "source": DataSource.NADLAN.value, "rent_nis": 7999}]
+    )
+
+    _validate(df, expected_total_2022=0.0)
+    output = capsys.readouterr().out
+
+    assert "2022 reference baseline retained for context: 0 NIS" in output
 
 
 def test_validate_raises_for_empty_missing_or_out_of_bounds() -> None:

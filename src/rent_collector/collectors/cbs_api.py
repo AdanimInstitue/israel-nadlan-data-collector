@@ -267,7 +267,15 @@ def _parse_cbs_series(
         period_raw = (
             row.get("period") or row.get("Period") or row.get("date") or row.get("Date") or ""
         )
-        year, quarter = _parse_period(str(period_raw))
+        parsed_period = _parse_period(str(period_raw))
+        if parsed_period is None:
+            logger.warning(
+                "CBS series %s row skipped because period %r could not be parsed.",
+                series_id,
+                period_raw,
+            )
+            continue
+        year, quarter = parsed_period
 
         # Try to extract value
         value = None
@@ -348,7 +356,7 @@ def _parse_cbs_series(
             )
 
 
-def _parse_period(period: str) -> tuple[int, int]:
+def _parse_period(period: str) -> tuple[int, int] | None:
     """
     Parse a period string to (year, quarter).
 
@@ -374,7 +382,7 @@ def _parse_period(period: str) -> tuple[int, int]:
     m2 = re.search(r"(\d{4})", period)
     if m2:
         return int(m2.group(1)), 4
-    return 2025, 4
+    return None
 
 
 def _extract_room_group_from_label(label: str) -> RoomGroup | None:

@@ -48,13 +48,18 @@ def _setup_logging(verbose: bool) -> None:
 @click.option(
     "--validate",
     is_flag=True,
-    help="After collection, validate total against expected baseline.",
+    help="After collection, validate output shape and sanity bounds.",
 )
 @click.option(
+    "--reference-total-2022",
     "--expected-total-2022",
+    "expected_total_2022",
     type=float,
     default=None,
-    help="Expected annual total normative rent from 2022 (NIS). Used with --validate.",
+    help=(
+        "Optional 2022 facility-level reference baseline (NIS) shown during validation "
+        "for context only; not enforced as a pass/fail gate."
+    ),
 )
 @click.option(
     "--output",

@@ -41,7 +41,7 @@ def test_parse_period_and_room_group_helpers() -> None:
     assert _parse_period("2024-12") == (2024, 4)
     assert _parse_period("Q3 2024") == (2024, 3)
     assert _parse_period("2024") == (2024, 4)
-    assert _parse_period("unknown") == (2025, 4)
+    assert _parse_period("unknown") is None
     assert _extract_room_group_from_label("Average rent, 3.5 rooms") == RoomGroup.R3_5
     assert _extract_room_group_from_label("five or more rooms") == RoomGroup.R5_PLUS
     assert _extract_room_group_from_label("0.5 rooms") is None
@@ -99,6 +99,15 @@ def test_normalise_and_parse_series(monkeypatch) -> None:
     )
     assert len(parsed_by_name) == 1
     assert parsed_by_name[0].locality_code == "5000"
+
+    skipped = list(
+        _parse_cbs_series(
+            [{"period": "unknown", "value": 5000, "cityCode": "5000", "rooms": "3"}],
+            "125",
+            "Bad period",
+        )
+    )
+    assert skipped == []
 
 
 def test_collector_scan_fetch_collect_and_probe(monkeypatch) -> None:

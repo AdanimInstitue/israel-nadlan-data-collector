@@ -68,8 +68,11 @@ python scripts/collect.py --source boi-hedonic
 # Dry run (probe endpoints, don't save)
 python scripts/collect.py --dry-run
 
-# Validate output against expected total
-python scripts/collect.py --validate --expected-total-2022 131000000
+# Validate output shape and sanity bounds
+python scripts/collect.py --validate
+
+# Optionally print a 2022 facility-level reference baseline for context
+python scripts/collect.py --validate --reference-total-2022 131000000
 ```
 
 ## Project structure

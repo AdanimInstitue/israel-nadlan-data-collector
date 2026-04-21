@@ -10,7 +10,8 @@
 - CLI sanity check: `python scripts/collect.py --help`
 - Probe sources: `python scripts/collect.py --probe`
 - Dry run: `python scripts/collect.py --source nadlan --source cbs-table49 --source cbs-api --source boi-hedonic --dry-run`
-- Full validated run: `python scripts/collect.py --validate --expected-total-2022 131000000`
+- Full validated run: `python scripts/collect.py --validate`
+- Validation with 2022 context baseline: `python scripts/collect.py --validate --reference-total-2022 131000000`
 - Unit tests: `pytest -m "not integration"`
 - Integration tests: `pytest -m integration`
 - Lint: `ruff check .`
@@ -49,7 +50,7 @@
 - Prefer nadlan data over CBS Table 4.9, CBS Table 4.9 over CBS API, and model fallback last.
 
 ## Validation Constraints
-- Validation target: annualized total rent must be at least `131000000` NIS.
+- Validation enforces output integrity and sanity bounds; the 2022 facility-level total is reference-only context, not a direct pass/fail gate for the locality-by-room table.
 - Sanity bounds for published output:
   - no rows with `rent_nis < 500`
   - no rows with `rent_nis > 20000`

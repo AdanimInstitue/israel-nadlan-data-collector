@@ -66,10 +66,9 @@ def run_pipeline(
         sources: Which collectors to run. None = all. Allowed values:
                  "nadlan", "cbs-api", "cbs-table49", "boi-hedonic", "data-gov-il"
         dry_run: Probe endpoints but don't save output.
-        validate: After collection, check that the total normative rent
-                  estimate is in the expected range.
-        expected_total_2022: Baseline total annual rent (NIS) from 2022.
-                             Used for validation.
+        validate: After collection, check output shape and sanity bounds.
+        expected_total_2022: Optional 2022 reference baseline (NIS), retained
+                             for operator context only and not enforced.
         scan_catalog: Pass to CBSApiCollector to print all CBS series.
     """
     all_sources = sources or ["nadlan", "cbs-table49", "cbs-api", "boi-hedonic"]
@@ -248,7 +247,7 @@ def _validate(df: pd.DataFrame, expected_total_2022: float | None) -> None:
     console.log(f"  Sum of all rent_nis (monthly): {total_monthly:,.0f} NIS")
     console.log(f"  Annualised row-sum (informational only): {total_annual:,.0f} NIS")
 
-    if expected_total_2022:
+    if expected_total_2022 is not None:
         console.log(
             "  [yellow]! The provided 2022 baseline is facility-level and is not directly "
             "comparable to this unweighted locality-by-room output.[/yellow]"

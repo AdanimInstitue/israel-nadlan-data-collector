@@ -6,9 +6,12 @@ from rent_collector.utils.http_client import RateLimitedSession
 
 
 class _Response:
-    def __init__(self, *, json_data=None, content: bytes = b"payload") -> None:
+    def __init__(
+        self, *, json_data=None, content: bytes = b"payload", status_code: int = 200
+    ) -> None:
         self._json_data = json_data if json_data is not None else {"ok": True}
         self.content = content
+        self.status_code = status_code
         self.status_checked = False
 
     def json(self):
@@ -69,3 +72,34 @@ def test_rate_limited_session_post_can_skip_raise_for_status(monkeypatch) -> Non
 
     assert returned is response
     assert response.status_checked is False
+
+
+def test_rate_limited_session_retries_http_5xx_even_when_raise_for_status_is_false(
+    monkeypatch,
+) -> None:
+    session = RateLimitedSession(delay=0.0, timeout=5.0, user_agent="test-agent")
+    attempts = {"count": 0}
+
+    class _RetryResponse(_Response):
+        def raise_for_status(self) -> None:
+            self.status_checked = True
+            if self.status_code >= 500:
+                from requests import HTTPError
+
+                raise HTTPError("server error")
+
+    responses = [
+        _RetryResponse(status_code=502),
+        _RetryResponse(json_data={"ok": True}, status_code=200),
+    ]
+
+    def fake_get(*_args, **_kwargs):
+        attempts["count"] += 1
+        return responses.pop(0)
+
+    monkeypatch.setattr(session._session, "get", fake_get)
+
+    result = session.get("https://example.com/retry", raise_for_status=False)
+
+    assert result.status_code == 200
+    assert attempts["count"] == 2

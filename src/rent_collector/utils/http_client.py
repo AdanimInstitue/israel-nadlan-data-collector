@@ -3,7 +3,7 @@ Polite, rate-limited HTTP client with automatic retries.
 
 Wraps `requests` with:
   - Configurable per-host delay (default 1.2 s) to avoid hammering government servers
-  - Exponential backoff retries on 5xx / transient errors
+  - Exponential backoff retries on transient errors and HTTP 5xx responses
   - Consistent User-Agent header
   - Request logging via `rich`
 """
@@ -32,6 +32,12 @@ from rent_collector.config import (
 )
 
 console = Console(stderr=True)
+
+
+def _maybe_raise_retryable_status(resp: Response) -> None:
+    """Raise for HTTP 5xx so tenacity can retry transient server-side failures."""
+    if 500 <= resp.status_code < 600:
+        resp.raise_for_status()
 
 
 class RateLimitedSession:
@@ -93,6 +99,7 @@ class RateLimitedSession:
             headers=headers,
             timeout=self._timeout,
         )
+        _maybe_raise_retryable_status(resp)
         if raise_for_status:
             resp.raise_for_status()
         return resp
@@ -126,6 +133,7 @@ class RateLimitedSession:
             headers=headers,
             timeout=self._timeout,
         )
+        _maybe_raise_retryable_status(resp)
         if raise_for_status:
             resp.raise_for_status()
         return resp
