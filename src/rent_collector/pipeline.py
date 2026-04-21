@@ -136,6 +136,7 @@ def run_pipeline(
     # 5. Save
     # ------------------------------------------------------------------
     if not dry_run:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_path, index=False, encoding="utf-8-sig")
         console.log(f"[bold green]Output saved to {output_path}[/bold green]")
     else:
@@ -210,18 +211,22 @@ def _merge_observations(observations: list[RentObservation]) -> pd.DataFrame:
 
 
 def _save_crosswalk(crosswalk: LocalityCrosswalk, path: Path) -> None:
-    rows = [
-        {
-            "locality_code": loc.code,
-            "locality_name_he": loc.name_he,
-            "locality_name_en": loc.name_en,
-            "district_he": loc.district_he,
-            "district_en": loc.district_en,
-            "population_approx": loc.population,
-            "source": loc.source,
-        }
-        for loc in crosswalk.all_localities()
-    ]
+    rows = sorted(
+        [
+            {
+                "locality_code": loc.code,
+                "locality_name_he": loc.name_he,
+                "locality_name_en": loc.name_en,
+                "district_he": loc.district_he,
+                "district_en": loc.district_en,
+                "population_approx": loc.population,
+                "source": loc.source,
+            }
+            for loc in crosswalk.all_localities()
+        ],
+        key=lambda row: (row["locality_code"], row["locality_name_he"]),
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8-sig")
     console.log(f"  Crosswalk saved to {path}")
 

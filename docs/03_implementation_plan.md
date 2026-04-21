@@ -106,7 +106,7 @@ Expect: ~30 cities + 6 districts × 4 room groups = ~144 rows.
 python scripts/collect.py --source all --output data/output/rent_benchmarks.csv --validate
 ```
 
-Merges all sources using priority order. Validates that total annual normative rent ≥ 131M NIS. If validation fails, investigate which localities are missing.
+Merges all sources using priority order. Validation enforces output-shape and rent-bounds checks on the locality-by-room table. The 2022 baseline remains reference context only; if validation fails, investigate which localities are missing or malformed.
 
 ---
 
@@ -118,12 +118,12 @@ After a full run, perform the following checks:
 
 **Coverage check:** Every locality in the facility registry should have at least one row in `rent_benchmarks.csv`. Cross-join with the Ministry of Welfare's facility list and flag any locality codes with no rent estimate.
 
-**Baseline check (automated):**
+**Reference baseline check (informational):**
 ```bash
 python scripts/collect.py --validate --expected-total-2022 131000000
 ```
 
-The pipeline sums `rent_nis * 4 * num_residents_proxy` across all facilities; if < 131M NIS, the run is flagged.
+The pipeline logs the annualised unweighted sum across locality-by-room rows and prints the supplied 2022 baseline for operator context. It does not ingest facilities, compute resident-weighted totals, or fail the run against the 131M NIS figure.
 
 **Distribution check:** Review the histogram of `rent_nis` by district. Outliers (extremely high or low values) should be investigated — they may indicate parsing errors or mismatched room groups.
 

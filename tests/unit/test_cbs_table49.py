@@ -276,7 +276,7 @@ def test_cbs_table49_collect_skips_blank_city_rows_and_latest_column_branching(m
             ["Big cities", 1, 1, 1],
         ]
     )
-    assert _latest_price_column(df_with_missing_marker) == (2, 2024, 1)
+    assert _latest_price_column(df_with_missing_marker) == (1, 2025, 4)
 
     df_missing_value_marker = pd.DataFrame(
         [
@@ -291,3 +291,37 @@ def test_cbs_table49_collect_skips_blank_city_rows_and_latest_column_branching(m
         ]
     )
     assert _latest_price_column(df_missing_value_marker) == (1, 2025, 4)
+
+
+def test_latest_price_column_prefers_newer_candidate_over_existing_best() -> None:
+    df = pd.DataFrame(
+        [
+            [None, None, None],
+            [None, None, None],
+            [None, None, None],
+            [None, 2024, 2025],
+            [None, "X-XII", "I-III"],
+            [None, "Average", "Average"],
+            [None, None, None],
+            ["Big cities", 1, 1],
+        ]
+    )
+
+    assert _latest_price_column(df) == (2, 2025, 1)
+
+
+def test_latest_price_column_keeps_existing_best_when_next_candidate_is_older() -> None:
+    df = pd.DataFrame(
+        [
+            [None, None, None],
+            [None, None, None],
+            [None, None, None],
+            [None, 2025, 2024],
+            [None, "I-III", "X-XII"],
+            [None, "Average", "Average"],
+            [None, None, None],
+            ["Big cities", 1, 1],
+        ]
+    )
+
+    assert _latest_price_column(df) == (1, 2025, 1)

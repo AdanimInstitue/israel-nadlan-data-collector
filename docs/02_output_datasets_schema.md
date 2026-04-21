@@ -12,7 +12,7 @@ The collector produces two CSV files, written to `data/output/` inside `israel-r
 
 | Column | Type | Nullable | Description |
 |---|---|---|---|
-| `locality_code` | string | No | CBS 4-digit locality code (e.g. `"5000"` for Tel Aviv). For districts: `"DIST_JER"`, `"DIST_TA"`, etc. |
+| `locality_code` | string | No | CBS locality code, stored as a string. Numeric locality codes may be 1–4 digits (e.g. `"70"` for Ashdod, `"5000"` for Tel Aviv). District aggregates use string IDs such as `"DIST_JER"` and `"DIST_TA"`. |
 | `locality_name_he` | string | No | Locality name in Hebrew (from CBS registry or source table). |
 | `locality_name_en` | string | No | Locality name in English. |
 | `room_group` | string | No | Room-size bucket (see Room Groups below). One of: `"1.0"`, `"1.5"`, `"2.0"`, `"2.5"`, `"3.0"`, `"3.5"`, `"4.0"`, `"4.5"`, `"5.0"`, `"5+"`. |
@@ -74,7 +74,7 @@ locality_code,locality_name_he,locality_name_en,room_group,median_rent_nis,avg_r
 
 | Column | Type | Nullable | Description |
 |---|---|---|---|
-| `locality_code` | string | No | CBS 4-digit locality code (primary key). |
+| `locality_code` | string | No | CBS locality code (primary key), stored as a string. Numeric locality codes may be 1–4 digits. |
 | `locality_name_he` | string | No | Official Hebrew name as published by CBS. |
 | `locality_name_en` | string | No | English transliteration (CBS or COGAT standard where available). |
 | `district_he` | string | Yes | District name in Hebrew (מחוז). One of: ירושלים, תל אביב, חיפה, מרכז, צפון, דרום, יהודה ושומרון. |

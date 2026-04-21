@@ -280,7 +280,9 @@ def test_nadlan_branch_paths(monkeypatch) -> None:
     assert list(_parse_response([{"rooms": "x"}], "5000", "תל אביב", "TA")) == []
     assert list(_parse_response({"data": [{"rooms": "3", "avg": 7000}]}, "5000", "תל אביב", "TA"))
     assert list(_parse_response({"rooms": {"3": {"avgRent": 7000}}}, "5000", "תל אביב", "TA"))
-    assert list(_parse_response({"unknown": True}, "5000", "תל אביב", "TA")) == []
+    rows = list(_parse_response({"result": [{"rooms": "3", "avg": 7200}]}, "5000", "תל אביב", "TA"))
+    assert len(rows) == 1
+    assert rows[0].avg_rent_nis == 7200
 
     assert list(_parse_nextjs_blob({}, "5000", "תל אביב", "TA")) == []
     assert _item_to_observation([], "5000", "תל אביב", "TA", 2025, 1) is None
@@ -295,8 +297,23 @@ def test_nadlan_branch_paths(monkeypatch) -> None:
     assert _latest_graph_point([{"year": 2025, "month": 1}, "x"]) is None
 
 
+def test_parse_response_logs_unknown_dict_shape(caplog) -> None:
+    caplog.set_level("WARNING")
+
+    assert list(_parse_response({"unknown": True}, "5000", "תל אביב", "TA")) == []
+    assert any("Unrecognised nadlan response shape" in record.message for record in caplog.records)
+
+
+def test_parse_response_logs_unknown_non_collection_shape(caplog) -> None:
+    caplog.set_level("WARNING")
+
+    assert list(_parse_response("unexpected", "5000", "תל אביב", "TA")) == []
+    assert any("Unrecognised nadlan response shape" in record.message for record in caplog.records)
+
+
 def test_nadlan_additional_branch_coverage(monkeypatch, caplog) -> None:
     monkeypatch.setattr(mod, "get_crosswalk", make_crosswalk)
+    caplog.set_level("WARNING")
 
     payload = {
         "trends": {
@@ -383,6 +400,7 @@ def test_nadlan_additional_branch_coverage(monkeypatch, caplog) -> None:
     assert len(nested_list) == 1
 
     assert list(_parse_response({"unknown": True}, "5000", "תל אביב", "TA")) == []
+    assert any("Unrecognised nadlan response shape" in record.message for record in caplog.records)
 
     nextjs = list(
         _parse_nextjs_blob(

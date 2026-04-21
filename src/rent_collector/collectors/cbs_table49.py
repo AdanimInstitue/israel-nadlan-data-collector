@@ -230,7 +230,11 @@ def _latest_price_column(df: pd.DataFrame) -> tuple[int, int, int]:
         if pd.isna(df.iloc[7, col]):
             continue
         candidate = (col, current_year, quarter_map[period_raw])
-        if best is None or candidate > best:
+        if best is None or (candidate[1], candidate[2], candidate[0]) > (
+            best[1],
+            best[2],
+            best[0],
+        ):
             best = candidate
     if best is None:
         raise ValueError("Could not find a populated average-price column in Table 4.9.")

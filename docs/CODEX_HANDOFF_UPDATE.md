@@ -104,7 +104,7 @@ This may take 30–60 minutes due to polite rate limiting across ~1,200 localiti
 **Success criteria:**
 - Exit code 0
 - `data/output/rent_benchmarks.csv` exists with > 5,000 rows
-- Validation passes (total annual normative rent ≥ 131,000,000 NIS)
+- Validation passes on enforced output checks; the 131,000,000 NIS 2022 baseline is logged for context only
 - Tel Aviv 3-room `rent_nis` is in the range 6,000–9,000
 - No rows with `rent_nis < 500` or `rent_nis > 20,000`
 

@@ -7,7 +7,7 @@ import pytest
 
 from rent_collector.collectors.base import BaseCollector
 from rent_collector.collectors.cbs_table49 import _extract_table49_entities
-from rent_collector.models import DataSource, RentObservation, RoomGroup
+from rent_collector.models import DataSource, Locality, RentObservation, RoomGroup
 from rent_collector.pipeline import (
     ValidationFailedError,
     _merge_observations,
@@ -17,6 +17,7 @@ from rent_collector.pipeline import (
     probe_all,
     run_pipeline,
 )
+from rent_collector.utils.locality_crosswalk import LocalityCrosswalk
 from tests.helpers import make_crosswalk
 
 
@@ -131,6 +132,23 @@ def test_save_crosswalk_matches_documented_schema(tmp_path: Path) -> None:
         "population_approx",
         "source",
     ]
+
+
+def test_save_crosswalk_sorts_rows_and_creates_parent_dir(tmp_path: Path) -> None:
+    path = tmp_path / "nested" / "locality_crosswalk.csv"
+    crosswalk = LocalityCrosswalk(
+        [
+            Locality(code="9000", name_he="באר שבע", name_en="Beer Sheva"),
+            Locality(code="70", name_he="אשדוד", name_en="Ashdod"),
+            Locality(code="5000", name_he="תל אביב - יפו", name_en="Tel Aviv - Yafo"),
+        ]
+    )
+
+    _save_crosswalk(crosswalk, path)
+
+    df = pd.read_csv(path)
+    assert df["locality_code"].astype(str).tolist() == ["5000", "70", "9000"]
+    assert df["locality_name_he"].tolist() == ["תל אביב - יפו", "אשדוד", "באר שבע"]
 
 
 def test_validate_reports_reference_baseline_and_bounds(capsys) -> None:
@@ -260,6 +278,61 @@ def test_run_pipeline_validate_and_dry_run(monkeypatch, tmp_path: Path) -> None:
 
     assert len(df) == 1
     assert not (tmp_path / "out.csv").exists()
+
+
+def test_run_pipeline_creates_output_parent_only_when_writing(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("rent_collector.pipeline.get_crosswalk", make_crosswalk)
+
+    class _Collector(BaseCollector):
+        def __init__(self, items):
+            super().__init__()
+            self._items = items
+
+        def collect(self):
+            return iter(self._items)
+
+    monkeypatch.setattr(
+        "rent_collector.pipeline.NadlanCollector",
+        lambda dry_run=False: _Collector(
+            [
+                RentObservation(
+                    locality_code="5000",
+                    locality_name_he="תל אביב - יפו",
+                    locality_name_en="Tel Aviv - Yafo",
+                    room_group=RoomGroup.R3_0,
+                    avg_rent_nis=7999,
+                    source=DataSource.NADLAN,
+                    year=2025,
+                    quarter=1,
+                )
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSTable49Collector", lambda dry_run=False: _Collector([])
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSApiCollector",
+        lambda dry_run=False, scan_catalog=False: _Collector([]),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.BoIHedonicCollector", lambda dry_run=False: _Collector([])
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.DataGovILCollector", lambda dry_run=False: _Collector([])
+    )
+
+    output_path = tmp_path / "nested" / "out.csv"
+    crosswalk_path = tmp_path / "nested" / "crosswalk.csv"
+
+    run_pipeline(
+        sources=["nadlan"],
+        output_path=output_path,
+        crosswalk_path=crosswalk_path,
+    )
+
+    assert output_path.exists()
+    assert crosswalk_path.exists()
 
 
 def test_run_pipeline_executes_validate_branch(monkeypatch, tmp_path: Path) -> None:

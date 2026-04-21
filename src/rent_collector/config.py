@@ -20,7 +20,6 @@ load_dotenv()
 ROOT_DIR = Path(__file__).resolve().parents[2]  # repo root
 DATA_DIR = ROOT_DIR / "data"
 OUTPUT_DIR = DATA_DIR / "output"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 SEED_LOCALITIES_CSV = DATA_DIR / "locality_codes_seed.csv"
 
