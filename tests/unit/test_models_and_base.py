@@ -17,6 +17,11 @@ class _Collector(BaseCollector):
         return iter(self._items or [])
 
 
+class _DelegatingCollector(BaseCollector):
+    def collect(self):
+        return super().collect()
+
+
 def test_room_group_from_float_rounds_and_caps() -> None:
     assert RoomGroup.from_float(2.24) == RoomGroup.R2_0
     assert RoomGroup.from_float(2.26) == RoomGroup.R2_5
@@ -79,3 +84,7 @@ def test_base_probe_returns_sample_for_success() -> None:
 def test_base_probe_handles_empty_and_error() -> None:
     assert _Collector([]).probe()["note"] == "no data returned"
     assert _Collector(RuntimeError("boom")).probe() == {"ok": False, "error": "boom"}
+
+
+def test_base_collect_abstract_stub_is_reachable() -> None:
+    assert _DelegatingCollector().collect() is None

@@ -136,6 +136,74 @@ def test_nadlan_collector_discovery_collect_and_probe(monkeypatch) -> None:
     assert probe["ok"] is True
 
 
+def test_nadlan_discovery_and_fetch_locality_branch_paths(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(mod, "get_crosswalk", make_crosswalk)
+    caplog.set_level("DEBUG")
+
+    class _ClientWithResponses:
+        def __init__(self, responses):
+            self._responses = list(responses)
+
+        def get(self, *_args, **_kwargs):
+            response = self._responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+
+    collector = NadlanCollector(locality_codes=["5000"])
+    unrecognised = _Resp(200, {"message": "not rent data"})
+    parse_error = _Resp(200, {})
+    parse_error.json = lambda: (_ for _ in ()).throw(ValueError("bad json"))  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        mod,
+        "get_client",
+        lambda: _ClientWithResponses(
+            [unrecognised, parse_error, mod.requests.RequestException("boom")]
+        ),
+    )
+    monkeypatch.setattr(mod, "NADLAN_RENT_ENDPOINTS", ["/api/a", "/api/b", "/api/c"])
+
+    assert collector.discover_endpoint() is None
+    assert collector._active_endpoint is None
+
+    collector._active_endpoint = "/api/getRentsBySettlement"
+    monkeypatch.setattr(collector, "_fetch_via_api", lambda *_args: iter(()))
+    assert list(collector._fetch_locality("5000", "תל אביב", "TA")) == []
+
+    collector._active_endpoint = None
+    monkeypatch.setattr(
+        collector,
+        "_fetch_via_html",
+        lambda *_args: iter(
+            [
+                next(
+                    iter(
+                        _parse_response(
+                            {"data": [{"rooms": "3", "median": 7000}]},
+                            "5000",
+                            "תל אביב",
+                            "TA",
+                        )
+                    )
+                )
+            ]
+        ),
+    )
+    html_rows = list(collector._fetch_locality("5000", "תל אביב", "TA"))
+    assert html_rows[0].median_rent_nis == 7000
+
+    collector = NadlanCollector(locality_codes=["5000"])
+    collector._active_endpoint = "/api/getRentsBySettlement"
+    monkeypatch.setattr(collector, "_fetch_locality", lambda *_args: iter(()))
+    assert list(collector.collect()) == []
+    assert any("No data for locality 5000" in record.message for record in caplog.records)
+
+    status_client = _ClientWithResponses([_Resp(500, {})])
+    monkeypatch.setattr(mod, "get_client", lambda: status_client)
+    monkeypatch.setattr(mod, "NADLAN_RENT_ENDPOINTS", ["/api/status"])
+    assert NadlanCollector(locality_codes=["5000"]).discover_endpoint() is None
+
+
 def test_nadlan_branch_paths(monkeypatch) -> None:
     class _ErrorClient:
         def __init__(self, responses=None, exc=None):
@@ -198,6 +266,17 @@ def test_nadlan_branch_paths(monkeypatch) -> None:
     )
     assert list(collector._fetch_via_html("5000", "תל אביב - יפו", "Tel Aviv - Yafo")) == []
 
+    html = """
+    <html><body>
+    <script id="__NEXT_DATA__">not-json</script>
+    <script>window.__DATA__ = {not-json};</script>
+    </body></html>
+    """
+    monkeypatch.setattr(
+        mod, "get_client", lambda: _Client([type("Resp", (), {"status_code": 200, "text": html})()])
+    )
+    assert list(collector._fetch_via_html("5000", "תל אביב - יפו", "Tel Aviv - Yafo")) == []
+
     assert list(_parse_response([{"rooms": "x"}], "5000", "תל אביב", "TA")) == []
     assert list(_parse_response({"data": [{"rooms": "3", "avg": 7000}]}, "5000", "תל אביב", "TA"))
     assert list(_parse_response({"rooms": {"3": {"avgRent": 7000}}}, "5000", "תל אביב", "TA"))
@@ -210,6 +289,7 @@ def test_nadlan_branch_paths(monkeypatch) -> None:
     )
     assert _item_to_observation({"rooms": "3"}, "5000", "תל אביב", "TA", 2025, 1) is None
     assert mod._parse_room_group("חדר 1") == RoomGroup.R1_0
+    assert mod._parse_room_group("3.2") == RoomGroup.R3_0
     assert mod._parse_room_group("bad") is None
     assert _extract_price({"avg": "bad"}, ["avg"]) is None
     assert _latest_graph_point([{"year": 2025, "month": 1}, "x"]) is None
@@ -266,7 +346,14 @@ def test_nadlan_additional_branch_coverage(monkeypatch, caplog) -> None:
 
     room_rows = list(
         _parse_response(
-            {"rooms": {"x": [], "3": {"median": None, "avg": None}, "4": {"avg": 8000}}},
+            {
+                "rooms": {
+                    "bad": {"avg": 7000},
+                    "x": [],
+                    "3": {"median": None, "avg": None},
+                    "4": {"avg": 8000},
+                }
+            },
             "5000",
             "תל אביב",
             "TA",
@@ -274,3 +361,47 @@ def test_nadlan_additional_branch_coverage(monkeypatch, caplog) -> None:
     )
     assert len(room_rows) == 1
     assert room_rows[0].room_group == RoomGroup.R4_0
+
+    top_level = list(
+        _parse_response(
+            [{"rooms": "3", "median": 7100}, {"rooms": "bad", "median": 1}],
+            "5000",
+            "תל אביב",
+            "TA",
+        )
+    )
+    assert len(top_level) == 1
+
+    nested_list = list(
+        _parse_response(
+            {"data": [{"rooms": "bad", "median": 1}, {"rooms": "3", "avg": 7000}]},
+            "5000",
+            "תל אביב",
+            "TA",
+        )
+    )
+    assert len(nested_list) == 1
+
+    assert list(_parse_response({"unknown": True}, "5000", "תל אביב", "TA")) == []
+
+    nextjs = list(
+        _parse_nextjs_blob(
+            {"props": {"pageProps": {"settlementRent": {"data": [{"rooms": "4", "avg": 8300}]}}}},
+            "5000",
+            "תל אביב",
+            "TA",
+        )
+    )
+    assert nextjs[0].room_group == RoomGroup.R4_0
+    assert (
+        list(
+            _parse_nextjs_blob(
+                {"props": {"pageProps": {"other": {"rooms": {"3": {"avg": 7000}}}}}},
+                "5000",
+                "תל אביב",
+                "TA",
+            )
+        )
+        == []
+    )
+    assert mod._parse_room_group("3") == RoomGroup.R3_0

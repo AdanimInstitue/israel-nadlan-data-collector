@@ -47,6 +47,12 @@ def test_parse_period_and_room_group_helpers() -> None:
     assert _extract_room_group_from_label("0.5 rooms") is None
 
 
+def test_extract_room_group_handles_valueerror(monkeypatch) -> None:
+    monkeypatch.setattr(RoomGroup, "from_float", lambda _value: (_ for _ in ()).throw(ValueError()))
+
+    assert _extract_room_group_from_label("3 rooms") is None
+
+
 def test_normalise_and_parse_series(monkeypatch) -> None:
     monkeypatch.setattr(mod, "get_crosswalk", make_crosswalk)
 
@@ -108,6 +114,24 @@ def test_normalise_and_parse_series(monkeypatch) -> None:
         )
     )
     assert skipped == []
+
+    parsed_from_name = list(
+        _parse_cbs_series(
+            [{"period": "2024-Q4", "value": 5100, "city": "תל אביב - יפו", "rooms": "3"}],
+            "126",
+            "Name lookup",
+        )
+    )
+    assert parsed_from_name[0].locality_code == "5000"
+
+    parsed_without_locality = list(
+        _parse_cbs_series(
+            [{"period": "2024-Q4", "value": 4200, "rooms": "3"}],
+            "127",
+            "National fallback",
+        )
+    )
+    assert parsed_without_locality[0].locality_code == "NATIONAL"
 
 
 def test_collector_scan_fetch_collect_and_probe(monkeypatch) -> None:
@@ -217,6 +241,38 @@ def test_scan_catalog_parses_price_all_json(monkeypatch) -> None:
     matches = CBSApiCollector().scan_catalog()
 
     assert any(match["id"] == "555" for match in matches)
+
+
+def test_scan_catalog_parses_price_all_name_field_and_other_shapes(monkeypatch) -> None:
+    catalog_json = {
+        "chapters": [{"chapterId": "4", "chapterName": "Rent chapter", "mainCode": "40010"}]
+    }
+    chapter_json = {"items": [{"id": "556", "name": "Rental snapshot"}]}
+    client = _Client(
+        responses=[_Resp("", json_data=catalog_json), _Resp("", json_data=chapter_json)]
+    )
+    monkeypatch.setattr(mod, "get_client", lambda: client)
+
+    matches = CBSApiCollector().scan_catalog()
+
+    assert any(match["id"] == "556" for match in matches)
+    assert _normalise_cbs_series({"Result": [{"id": "x"}]}) == [{"id": "x"}]
+    assert _normalise_cbs_series({"unexpected": "shape"}) == []
+
+
+def test_scan_catalog_ignores_non_rent_price_all_rows(monkeypatch) -> None:
+    catalog_json = {
+        "chapters": [{"chapterId": "4", "chapterName": "Rent chapter", "mainCode": "40010"}]
+    }
+    chapter_json = {"items": [{"id": "999", "name": "Consumer prices"}]}
+    client = _Client(
+        responses=[_Resp("", json_data=catalog_json), _Resp("", json_data=chapter_json)]
+    )
+    monkeypatch.setattr(mod, "get_client", lambda: client)
+
+    matches = CBSApiCollector().scan_catalog()
+
+    assert all(match["id"] != "999" for match in matches)
 
 
 def test_scan_catalog_skips_bad_chapters_and_price_all_failures(monkeypatch) -> None:

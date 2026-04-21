@@ -11,6 +11,7 @@ from rent_collector.models import DataSource, RentObservation, RoomGroup
 from rent_collector.pipeline import (
     ValidationFailedError,
     _merge_observations,
+    _print_summary,
     _save_crosswalk,
     _validate,
     probe_all,
@@ -259,6 +260,123 @@ def test_run_pipeline_validate_and_dry_run(monkeypatch, tmp_path: Path) -> None:
 
     assert len(df) == 1
     assert not (tmp_path / "out.csv").exists()
+
+
+def test_run_pipeline_executes_validate_branch(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("rent_collector.pipeline.get_crosswalk", make_crosswalk)
+
+    observation = RentObservation(
+        locality_code="5000",
+        locality_name_he="תל אביב - יפו",
+        locality_name_en="Tel Aviv - Yafo",
+        room_group=RoomGroup.R3_0,
+        median_rent_nis=7999,
+        source=DataSource.NADLAN,
+        year=2025,
+        quarter=1,
+    )
+
+    class _Collector(BaseCollector):
+        def collect(self):
+            return iter([observation])
+
+    monkeypatch.setattr(
+        "rent_collector.pipeline.NadlanCollector", lambda dry_run=False: _Collector()
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSTable49Collector",
+        lambda dry_run=False: type("C", (), {"collect": lambda self: iter(())})(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSApiCollector",
+        lambda dry_run=False, scan_catalog=False: type(
+            "C", (), {"collect": lambda self: iter(())}
+        )(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.BoIHedonicCollector",
+        lambda dry_run=False: type("C", (), {"collect": lambda self: iter(())})(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.DataGovILCollector",
+        lambda dry_run=False: type("C", (), {"collect": lambda self: iter(())})(),
+    )
+
+    called = {"validate": False}
+
+    def _fake_validate(df, expected_total_2022):
+        called["validate"] = True
+        assert expected_total_2022 == 1234
+        assert len(df) == 1
+
+    monkeypatch.setattr("rent_collector.pipeline._validate", _fake_validate)
+
+    run_pipeline(
+        sources=["nadlan"],
+        validate=True,
+        expected_total_2022=1234,
+        output_path=tmp_path / "out.csv",
+        crosswalk_path=tmp_path / "crosswalk.csv",
+    )
+
+    assert called["validate"] is True
+
+
+def test_run_pipeline_skips_validate_when_flag_is_false(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("rent_collector.pipeline.get_crosswalk", make_crosswalk)
+
+    observation = RentObservation(
+        locality_code="5000",
+        locality_name_he="תל אביב - יפו",
+        locality_name_en="Tel Aviv - Yafo",
+        room_group=RoomGroup.R3_0,
+        median_rent_nis=7999,
+        source=DataSource.NADLAN,
+        year=2025,
+        quarter=1,
+    )
+
+    class _Collector(BaseCollector):
+        def __init__(self, items):
+            super().__init__()
+            self._items = items
+
+        def collect(self):
+            return iter(self._items)
+
+    monkeypatch.setattr(
+        "rent_collector.pipeline.NadlanCollector", lambda dry_run=False: _Collector([observation])
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSTable49Collector", lambda dry_run=False: _Collector([])
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSApiCollector",
+        lambda dry_run=False, scan_catalog=False: _Collector([]),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.BoIHedonicCollector", lambda dry_run=False: _Collector([])
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.DataGovILCollector", lambda dry_run=False: _Collector([])
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline._validate",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not validate")),
+    )
+
+    df = run_pipeline(
+        sources=["nadlan"],
+        validate=False,
+        output_path=tmp_path / "out.csv",
+        crosswalk_path=tmp_path / "crosswalk.csv",
+    )
+
+    assert len(df) == 1
+
+
+def test_print_summary_returns_early_for_empty_df() -> None:
+    _print_summary(pd.DataFrame())
 
 
 def test_probe_all_aggregates_statuses(monkeypatch) -> None:

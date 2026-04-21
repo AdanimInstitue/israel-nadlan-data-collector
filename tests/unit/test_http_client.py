@@ -103,3 +103,16 @@ def test_rate_limited_session_retries_http_5xx_even_when_raise_for_status_is_fal
 
     assert result.status_code == 200
     assert attempts["count"] == 2
+
+
+def test_rate_limited_session_throttle_sleeps_when_requests_are_too_close(monkeypatch) -> None:
+    session = RateLimitedSession(delay=1.0, timeout=5.0, user_agent="test-agent")
+    sleeps: list[float] = []
+    monotonic_values = iter([0.2, 0.3])
+
+    monkeypatch.setattr("time.monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr("time.sleep", sleeps.append)
+
+    session._throttle("example.com")
+
+    assert sleeps == [0.8]

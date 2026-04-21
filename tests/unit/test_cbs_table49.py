@@ -63,9 +63,18 @@ def test_collector_download_parse_collect_and_probe(monkeypatch) -> None:
     monkeypatch.setattr(mod, "get_client", lambda: _Client([_Resp(404, b"missing")]))
     assert collector._download_excel() is None
 
+    monkeypatch.setattr(mod, "get_client", lambda: _Client([_Resp(200, b"pdf")]))
+    assert collector._download_pdf() == b"pdf"
+
+    monkeypatch.setattr(mod, "get_client", lambda: _Client([_Resp(404, b"missing")]))
+    assert collector._download_pdf() is None
+
     monkeypatch.setattr(collector, "_download_excel", lambda: None)
     monkeypatch.setattr(collector, "_download_pdf", lambda: b"pdf")
     assert collector.probe()["format"] == "pdf"
+
+    monkeypatch.setattr(collector, "_download_excel", lambda: b"excel")
+    assert collector.probe()["format"] == "excel"
 
     monkeypatch.setattr(collector, "_download_excel", lambda: b"excel")
     monkeypatch.setattr(
@@ -166,6 +175,7 @@ def test_cbs_table49_parser_and_lookup_branches(monkeypatch) -> None:
             raise RuntimeError("offline")
 
     monkeypatch.setattr(mod, "get_client", lambda: _ErrorClient())
+    assert collector._download_excel() is None
     assert collector._download_pdf() is None
 
     fake_df = pd.DataFrame(
@@ -206,3 +216,78 @@ def test_cbs_table49_parser_and_lookup_branches(monkeypatch) -> None:
     extracted = _extract_table49_entities(df, value_col=1, year=2024, quarter=4)
     assert extracted["city"].tolist() == ["Tel Aviv"]
     assert _resolve_table49_location("תל אביב - יפו - 9999") == ("5000", "Tel Aviv - Yafo")
+
+
+def test_cbs_table49_collect_skips_blank_city_rows_and_latest_column_branching(monkeypatch) -> None:
+    collector = CBSTable49Collector()
+    monkeypatch.setattr(mod, "get_crosswalk", make_crosswalk)
+    monkeypatch.setattr(collector, "_download_excel", lambda: b"excel")
+    monkeypatch.setattr(
+        collector,
+        "_parse_excel",
+        lambda _content: pd.DataFrame(
+            [
+                {
+                    "city": "",
+                    "room_group": RoomGroup.R3_0.value,
+                    "avg_rent_nis": 7999.0,
+                    "year": 2025,
+                    "quarter": 1,
+                },
+                {
+                    "city": "תל אביב - יפו",
+                    "room_group": RoomGroup.R3_0.value,
+                    "avg_rent_nis": 8100.0,
+                    "year": 2025,
+                    "quarter": 1,
+                },
+            ]
+        ),
+    )
+
+    rows = list(collector.collect())
+
+    assert len(rows) == 1
+    assert rows[0].avg_rent_nis == 8100.0
+
+    df = pd.DataFrame(
+        [
+            [None, None, None, None],
+            [None, None, None, None],
+            [None, None, None, None],
+            [None, 2024, 2025, 2025],
+            [None, "X-XII", "BAD", "I-III"],
+            [None, "Average", "Average", "Average"],
+            [None, None, None, None],
+            ["Big cities", 1, None, 1],
+        ]
+    )
+    assert _latest_price_column(df) == (3, 2025, 1)
+
+    df_with_missing_marker = pd.DataFrame(
+        [
+            [None, None, None, None],
+            [None, None, None, None],
+            [None, None, None, None],
+            [None, 2025, 2024, 2024],
+            [None, "X-XII", "I-III", "BAD"],
+            [None, "Average", "Average", "Average"],
+            [None, None, None, None],
+            ["Big cities", 1, 1, 1],
+        ]
+    )
+    assert _latest_price_column(df_with_missing_marker) == (2, 2024, 1)
+
+    df_missing_value_marker = pd.DataFrame(
+        [
+            [None, None, None],
+            [None, None, None],
+            [None, None, None],
+            [None, 2025, 2024],
+            [None, "X-XII", "I-III"],
+            [None, "Average", "Average"],
+            [None, None, None],
+            ["Big cities", 1, None],
+        ]
+    )
+    assert _latest_price_column(df_missing_value_marker) == (1, 2025, 4)
