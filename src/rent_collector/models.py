@@ -4,9 +4,12 @@ Shared data models for the rent collector.
 
 from __future__ import annotations
 
+import math
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic_core import PydanticUndefined
 
 # ---------------------------------------------------------------------------
 # Enumerations
@@ -45,6 +48,8 @@ class RoomGroup(str, Enum):
     @classmethod
     def from_float(cls, value: float) -> RoomGroup:
         """Convert a numeric value to a RoomGroup, rounding to nearest 0.5."""
+        if math.isnan(value):
+            return cls.R5_PLUS
         rounded = round(value * 2) / 2
         key = f"{rounded:.1f}" if rounded < 5 else "5+"
         try:
@@ -81,8 +86,10 @@ class RentObservation(BaseModel):
         default=None,
         description="Average monthly rent in NIS. Available from CBS Table 4.9 / API.",
     )
-    rent_nis: float = Field(
-        description=("Best available rent estimate in NIS: median if available, else average.")
+    rent_nis: float | None = Field(
+        default=None,
+        validate_default=True,
+        description=("Best available rent estimate in NIS: median if available, else average."),
     )
     source: DataSource = Field(description="Which collector produced this observation.")
     quarter: int | None = Field(
@@ -99,17 +106,17 @@ class RentObservation(BaseModel):
 
     @field_validator("rent_nis", mode="before")
     @classmethod
-    def _set_best_rent(cls, v: float | None, info: object) -> float:
+    def _set_best_rent(cls, v: Any, info: ValidationInfo) -> float:
         """If rent_nis not set, use median > average."""
-        if v is not None:
-            return v
-        data = info.data if hasattr(info, "data") else {}
+        if v not in (None, PydanticUndefined):
+            return float(v)
+        data = info.data
         median = data.get("median_rent_nis")
         avg = data.get("avg_rent_nis")
         if median is not None:
-            return median
+            return float(median)
         if avg is not None:
-            return avg
+            return float(avg)
         raise ValueError("At least one of median_rent_nis or avg_rent_nis must be set.")
 
 
@@ -125,9 +132,11 @@ class Locality(BaseModel):
     name_he: str = Field(description="Hebrew name.")
     name_en: str = Field(default="", description="English transliteration.")
     district_he: str = Field(default="", description="District (מחוז) in Hebrew.")
+    district_en: str = Field(default="", description="District in English.")
     sub_district_he: str = Field(default="", description="Sub-district (נפה) in Hebrew.")
     population: int | None = Field(default=None)
     is_municipal_authority: bool = Field(default=False)
+    source: str = Field(default="data.gov.il", description="Source of the locality record.")
 
 
 # ---------------------------------------------------------------------------

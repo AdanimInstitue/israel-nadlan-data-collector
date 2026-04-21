@@ -41,7 +41,7 @@ MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "4"))
 USER_AGENT: str = (
     "AdanimInstituteResearch/0.1 "
     "(normative-rent-study; contact: research@adanim.org.il) "
-    "python-httpx"
+    "python-requests"
 )
 
 # ---------------------------------------------------------------------------

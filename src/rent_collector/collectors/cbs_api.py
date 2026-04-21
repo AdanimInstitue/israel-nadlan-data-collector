@@ -108,13 +108,26 @@ class CBSApiCollector(BaseCollector):
                     f"{CBS_API_BASE_URL}/index/data/price_all",
                     params={"lang": "en", "chapter": chapter_id, "format": "json"},
                 )
-                root = ET.fromstring(chapter_resp.text)
+                chapter_rows: list[dict[str, object]]
+                try:
+                    chapter_payload = chapter_resp.json()
+                except ValueError:
+                    root = ET.fromstring(chapter_resp.text)
+                    chapter_rows = [
+                        {
+                            "code": index.attrib.get("code"),
+                            "index_name": index.findtext("index_name"),
+                        }
+                        for index in root.findall(".//index")
+                    ]
+                else:
+                    chapter_rows = _normalise_cbs_series(chapter_payload)
             except Exception:
                 continue
 
-            for index in root.findall(".//index"):
-                sid = str(index.attrib.get("code") or "")
-                name = (index.findtext("index_name") or "").strip()
+            for index in chapter_rows:
+                sid = str(index.get("code") or index.get("mainCode") or index.get("id") or "")
+                name = str(index.get("index_name") or index.get("name") or "").strip()
                 if sid and any(k in name.lower() for k in rent_keywords):
                     matches.append({"id": sid, "name": name, "chapter": chapter_id})
 
@@ -135,7 +148,7 @@ class CBSApiCollector(BaseCollector):
     # Single series fetch
     # ------------------------------------------------------------------
 
-    def fetch_series(self, series_id: str) -> list[dict]:
+    def fetch_series(self, series_id: str) -> list[dict[str, object]]:
         """
         Fetch a single CBS price series as a list of period-value dicts.
 
@@ -215,7 +228,7 @@ class CBSApiCollector(BaseCollector):
 # ---------------------------------------------------------------------------
 
 
-def _normalise_cbs_series(raw: object) -> list[dict]:
+def _normalise_cbs_series(raw: object) -> list[dict[str, object]]:
     """Normalise the various CBS API response shapes to a flat list of dicts."""
     if isinstance(raw, list):
         return raw
@@ -229,7 +242,7 @@ def _normalise_cbs_series(raw: object) -> list[dict]:
 
 
 def _parse_cbs_series(
-    rows: list[dict], series_id: str, series_name: str
+    rows: list[dict[str, object]], series_id: str, series_name: str
 ) -> Iterator[RentObservation]:
     """
     Parse a CBS series into RentObservation instances.
@@ -262,7 +275,7 @@ def _parse_cbs_series(
             v = row.get(vk)
             if v is not None:
                 try:
-                    value = float(v)
+                    value = float(str(v))
                     break
                 except (TypeError, ValueError):
                     pass
@@ -344,8 +357,8 @@ def _parse_period(period: str) -> tuple[int, int]:
     import re
 
     period = period.strip()
-    # "2024-Q4" or "2024-4"
-    m = re.search(r"(\d{4})[-/ ]?[Qq]?(\d)", period)
+    # "2024-Q4", "2024-4", "2024-12"
+    m = re.search(r"(\d{4})[-/ ]?[Qq]?(\d{1,2})\b", period)
     if m:
         year = int(m.group(1))
         q_or_month = int(m.group(2))
@@ -353,6 +366,10 @@ def _parse_period(period: str) -> tuple[int, int]:
             return year, q_or_month
         # It's a month → convert to quarter
         return year, (q_or_month - 1) // 3 + 1
+    # "Q4 2024"
+    m = re.search(r"[Qq](\d)\D+(\d{4})", period)
+    if m:
+        return int(m.group(2)), int(m.group(1))
     # Just a year
     m2 = re.search(r"(\d{4})", period)
     if m2:

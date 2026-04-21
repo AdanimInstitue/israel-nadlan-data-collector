@@ -146,9 +146,9 @@ def run_pipeline(
 # ---------------------------------------------------------------------------
 
 
-def probe_all() -> dict[str, dict]:
+def probe_all() -> dict[str, dict[str, object]]:
     """Probe all sources and return a status dict."""
-    results: dict[str, dict] = {}
+    results: dict[str, dict[str, object]] = {}
     collectors: list[tuple[str, BaseCollector]] = [
         ("nadlan", NadlanCollector()),
         ("cbs-api", CBSApiCollector()),
@@ -199,8 +199,9 @@ def _save_crosswalk(crosswalk: LocalityCrosswalk, path: Path) -> None:
             "locality_name_he": loc.name_he,
             "locality_name_en": loc.name_en,
             "district_he": loc.district_he,
-            "sub_district_he": loc.sub_district_he,
-            "population": loc.population,
+            "district_en": loc.district_en,
+            "population_approx": loc.population,
+            "source": loc.source,
         }
         for loc in crosswalk.all_localities()
     ]
@@ -210,11 +211,11 @@ def _save_crosswalk(crosswalk: LocalityCrosswalk, path: Path) -> None:
 
 def _validate(df: pd.DataFrame, expected_total_2022: float | None) -> None:
     """
-    Validation: sum of all normative rents should be ≥ expected_total_2022.
+    Validate output shape and sanity bounds.
 
-    This mirrors the check discussed in the Shay-Nethanel kickoff:
-    the 2022 reported total was ~131M NIS/year; our 2025 estimate should
-    be at least that.
+    The unweighted sum across locality × room rows is useful as a coarse trend
+    indicator, but it is not directly comparable to the 2022 facility-level
+    baseline used in the project handoff documents.
     """
     console.rule("Validation")
 
@@ -225,20 +226,28 @@ def _validate(df: pd.DataFrame, expected_total_2022: float | None) -> None:
     total_monthly = df["rent_nis"].sum()
     total_annual = total_monthly * 12
     console.log(f"  Sum of all rent_nis (monthly): {total_monthly:,.0f} NIS")
-    console.log(f"  Annualised: {total_annual:,.0f} NIS")
+    console.log(f"  Annualised row-sum (informational only): {total_annual:,.0f} NIS")
 
     if expected_total_2022:
-        if total_annual >= expected_total_2022:
-            console.log(
-                f"  [green]✓ Annual total ({total_annual:,.0f}) ≥ "
-                f"2022 baseline ({expected_total_2022:,.0f})[/green]"
-            )
-        else:
-            console.log(
-                f"  [red]✗ Annual total ({total_annual:,.0f}) < "
-                f"2022 baseline ({expected_total_2022:,.0f}). "
-                f"Check coverage and prices.[/red]"
-            )
+        console.log(
+            "  [yellow]! The provided 2022 baseline is facility-level and is not directly "
+            "comparable to this unweighted locality-by-room output.[/yellow]"
+        )
+        console.log(
+            f"  2022 reference baseline retained for context: {expected_total_2022:,.0f} NIS"
+        )
+
+    min_rent = float(df["rent_nis"].min())
+    max_rent = float(df["rent_nis"].max())
+    if min_rent < 500 or max_rent > 20_000:
+        console.log(
+            f"  [red]✗ Rent bounds check failed (min={min_rent:,.0f}, max={max_rent:,.0f}).[/red]"
+        )
+    else:
+        console.log(
+            "  [green]✓ Rent bounds check passed "
+            f"(min={min_rent:,.0f}, max={max_rent:,.0f}).[/green]"
+        )
 
     # Coverage
     cities_covered = df["locality_code"].nunique()

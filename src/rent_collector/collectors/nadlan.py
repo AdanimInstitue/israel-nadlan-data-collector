@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import requests
 from rich.console import Console
@@ -250,9 +250,10 @@ class NadlanCollector(BaseCollector):
 
         # Try Next.js data blob first
         next_data_tag = soup.find("script", {"id": "__NEXT_DATA__"})
-        if next_data_tag and next_data_tag.string:
+        next_data_text = getattr(next_data_tag, "string", None)
+        if next_data_tag is not None and next_data_text:
             try:
-                next_data = json.loads(next_data_tag.string)
+                next_data = json.loads(next_data_text)
                 yield from _parse_nextjs_blob(next_data, code, name_he, name_en)
                 return
             except Exception:
@@ -260,7 +261,7 @@ class NadlanCollector(BaseCollector):
 
         # Try inline JS variable (e.g. window.__DATA__ = {...})
         for script in soup.find_all("script"):
-            text = script.string or ""
+            text = getattr(script, "string", None) or ""
             # Look for JSON-like objects containing rent data
             match = re.search(
                 r"window\.__(?:DATA|APP_STATE|RENT_DATA)__\s*=\s*(\{.*?\});",
@@ -403,28 +404,21 @@ def _parse_response(data: Any, code: str, name_he: str, name_en: str) -> Iterato
                 room_group = _parse_room_group(str(item.get("numRooms")))
                 if room_group is None:
                     continue
-                summary = item.get("summary") if isinstance(item.get("summary"), dict) else {}
-                graph_data = (
-                    item.get("graphData") if isinstance(item.get("graphData"), list) else []
-                )
-                point = next(
-                    (
-                        row
-                        for row in graph_data
-                        if isinstance(row, dict) and row.get("settlementPrice")
-                    ),
-                    None,
-                )
+                summary_obj = item.get("summary")
+                summary = cast(dict[str, Any], summary_obj) if isinstance(summary_obj, dict) else {}
+                graph_data_obj = item.get("graphData")
+                graph_data = graph_data_obj if isinstance(graph_data_obj, list) else []
+                point = _latest_graph_point(graph_data)
                 avg = _extract_price(summary, ["lastYearAvgPrice", "settlementPrice"])
                 if avg is None and point is not None:
                     avg = _extract_price(point, ["settlementPrice"])
                 if avg is None:
                     continue
 
-                obs_year = int(point.get("year")) if point and point.get("year") else year
+                obs_year = int(point["year"]) if point and point.get("year") is not None else year
                 obs_quarter = (
-                    ((int(point.get("month")) - 1) // 3 + 1)
-                    if point and point.get("month")
+                    ((int(point["month"]) - 1) // 3 + 1)
+                    if point and point.get("month") is not None
                     else quarter
                 )
                 yield RentObservation(
@@ -432,7 +426,7 @@ def _parse_response(data: Any, code: str, name_he: str, name_en: str) -> Iterato
                     locality_name_he=name_he,
                     locality_name_en=name_en,
                     room_group=room_group,
-                    median_rent_nis=avg,
+                    median_rent_nis=None,
                     avg_rent_nis=avg,
                     rent_nis=avg,
                     source=DataSource.NADLAN,
@@ -614,3 +608,23 @@ def _extract_price(d: dict[str, Any], keys: list[str]) -> float | None:
             except (TypeError, ValueError):
                 pass
     return None
+
+
+def _latest_graph_point(graph_data: list[Any]) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+    for row in graph_data:
+        if not isinstance(row, dict):
+            continue
+        if _extract_price(row, ["settlementPrice"]) is None:
+            continue
+        candidates.append(row)
+
+    if not candidates:
+        return None
+
+    def _sort_key(row: dict[str, Any]) -> tuple[int, int]:
+        year = int(row.get("year") or 0)
+        month = int(row.get("month") or 0)
+        return year, month
+
+    return max(candidates, key=_sort_key)

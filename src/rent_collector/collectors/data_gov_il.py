@@ -60,7 +60,7 @@ def ckan_datastore_search(
     offset: int = 0,
     filters: dict[str, Any] | None = None,
     q: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Fetch records from a CKAN datastore resource.
 
@@ -81,7 +81,7 @@ def ckan_datastore_search(
     if q:
         params["q"] = q
 
-    all_records: list[dict] = []
+    all_records: list[dict[str, Any]] = []
 
     while True:
         data = client.get_json(url, params=params)
@@ -102,17 +102,18 @@ def ckan_datastore_search(
     return all_records
 
 
-def ckan_package_search(query: str, *, rows: int = 20) -> list[dict]:
+def ckan_package_search(query: str, *, rows: int = 20) -> list[dict[str, Any]]:
     """Search for datasets on data.gov.il."""
     client = get_client()
     url = f"{DATAGOV_API_BASE}/package_search"
     data = client.get_json(url, params={"q": query, "rows": rows})
     if not data.get("success"):
         return []
-    return data["result"].get("results", [])
+    results = data["result"].get("results", [])
+    return [pkg for pkg in results if isinstance(pkg, dict)]
 
 
-def ckan_organization_datasets(org_id: str) -> list[dict]:
+def ckan_organization_datasets(org_id: str) -> list[dict[str, Any]]:
     """List all datasets from an organisation."""
     client = get_client()
     url = f"{DATAGOV_API_BASE}/organization_show"
@@ -122,7 +123,8 @@ def ckan_organization_datasets(org_id: str) -> list[dict]:
     )
     if not data.get("success"):
         return []
-    return data["result"].get("packages", [])
+    packages = data["result"].get("packages", [])
+    return [pkg for pkg in packages if isinstance(pkg, dict)]
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +154,7 @@ class DataGovILCollector(BaseCollector):
         """No direct observations — data.gov.il is used for locality crosswalk only."""
         return iter([])
 
-    def discover_datasets(self, query: str = "שכר דירה") -> list[dict]:
+    def discover_datasets(self, query: str = "שכר דירה") -> list[dict[str, Any]]:
         """
         Search data.gov.il for datasets matching `query`.
         Prints a summary table and returns the raw result list.

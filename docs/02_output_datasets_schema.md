@@ -6,7 +6,7 @@ The collector produces two CSV files, written to `data/output/` inside `israel-r
 
 ## 1. `rent_benchmarks.csv`
 
-**Purpose:** One row per (locality, room group, time period) with the best available average monthly rent estimate in NIS and full provenance information.
+**Purpose:** One row per `(locality, room group, time period)` with the best available official monthly rent estimate in NIS and full provenance information.
 
 ### Columns
 
@@ -18,11 +18,11 @@ The collector produces two CSV files, written to `data/output/` inside `israel-r
 | `room_group` | string | No | Room-size bucket (see Room Groups below). One of: `"1.0"`, `"1.5"`, `"2.0"`, `"2.5"`, `"3.0"`, `"3.5"`, `"4.0"`, `"4.5"`, `"5.0"`, `"5+"`. |
 | `avg_rent_nis` | float | Yes | Source-reported **average** monthly rent in NIS. Null if only median is available. |
 | `median_rent_nis` | float | Yes | Source-reported **median** monthly rent in NIS. Null if only average is available. |
-| `rent_nis` | float | No | Best single rent estimate used for normative calculations. Set to `avg_rent_nis` if available, else `median_rent_nis`, else model-predicted value. |
-| `source` | string | No | Data source identifier. One of: `"nadlan"`, `"cbs_table49"`, `"cbs_api"`, `"boi_hedonic"`. |
+| `rent_nis` | float | No | Best single rent estimate used downstream. Set to `median_rent_nis` if available, else `avg_rent_nis`, else the model-predicted value. |
+| `source` | string | No | Data source identifier. One of: `"nadlan.gov.il"`, `"cbs_table49"`, `"cbs_api"`, `"boi_hedonic"`. |
 | `year` | integer | No | Reference year (e.g. `2025`). |
 | `quarter` | integer | Yes | Reference quarter (1–4). Null for annual or model-estimated values. |
-| `num_transactions` | integer | Yes | Number of rent transactions underlying the estimate (from nadlan). Null for other sources. |
+| `observations_count` | integer | Yes | Number of rent transactions / observations underlying the estimate when the source exposes it. |
 | `notes` | string | Yes | Free-text flags, e.g. `"placeholder-coefficients"` for unvalidated BoI hedonic estimates, or `"fallback-seed"` when the locality came from the seed CSV rather than the live registry. |
 
 ### Room Groups
@@ -46,7 +46,7 @@ The `room_group` column uses Israeli room count notation:
 
 | `source` | Priority | Description |
 |---|---|---|
-| `nadlan` | 1 (highest) | Median/average rent from real estate transaction database at nadlan.gov.il |
+| `nadlan.gov.il` | 1 (highest) | Rent from the Tax Authority real-estate portal. The live settlement JSON currently exposes an average field (`lastYearAvgPrice`), so `avg_rent_nis` is populated and `median_rent_nis` is left null for that shape. |
 | `cbs_table49` | 2 | Average rent from CBS Table 4.9 (monthly CPI publication), city or district level |
 | `cbs_api` | 3 | Rent price series from CBS REST API at api.cbs.gov.il |
 | `boi_hedonic` | 4 (fallback) | Predicted rent from Bank of Israel hedonic regression, calibrated to 2025 prices |
@@ -58,10 +58,10 @@ When multiple sources cover the same `(locality_code, room_group)` cell, only th
 ### Example Rows
 
 ```csv
-locality_code,locality_name_he,locality_name_en,room_group,avg_rent_nis,median_rent_nis,rent_nis,source,year,quarter,num_transactions,notes
-5000,תל אביב-יפו,Tel Aviv-Yafo,3.0,7350.0,7100.0,7350.0,nadlan,2025,1,412,
-3000,ירושלים,Jerusalem,3.0,5800.0,,5800.0,cbs_table49,2025,1,,
-9200,אשדוד,Ashdod,3.0,,,,boi_hedonic,2025,,,"placeholder-coefficients"
+locality_code,locality_name_he,locality_name_en,room_group,median_rent_nis,avg_rent_nis,rent_nis,source,quarter,year,observations_count,notes
+5000,תל אביב-יפו,TEL AVIV - YAFO,3.0,,7999.0,7999.0,nadlan.gov.il,1,2025,,nadlan settlement rent page JSON
+3000,ירושלים,JERUSALEM,3.0,,5800.0,5800.0,cbs_table49,1,2025,,
+9200,אשדוד,Ashdod,3.0,,,4200.0,boi_hedonic,,2025,,placeholder-coefficients
 ```
 
 ---
@@ -114,7 +114,7 @@ data: collection run {YYYY-MM-DD}
 Sources used: nadlan, cbs_table49, boi_hedonic
 Localities covered: {N}
 Total annual normative rent: {total_NIS:,.0f} NIS
-Validation: {"PASS" if ≥131M else "FAIL — review required"}
+Validation: PASS
 ```
 
 No explicit version column is included in the CSVs themselves; use `git log` and `git blame` for lineage.

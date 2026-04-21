@@ -18,7 +18,6 @@ from __future__ import annotations
 import csv
 import logging
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from rich.console import Console
 
@@ -29,9 +28,6 @@ from rent_collector.config import (
 )
 from rent_collector.models import Locality
 
-if TYPE_CHECKING:
-    pass
-
 logger = logging.getLogger(__name__)
 console = Console(stderr=True)
 
@@ -41,8 +37,10 @@ class LocalityCrosswalk:
 
     def __init__(self, localities: list[Locality]) -> None:
         self._by_code: dict[str, Locality] = {loc.code: loc for loc in localities}
-        # Also index by Hebrew name (normalised: strip whitespace, lower)
-        self._by_name_he: dict[str, Locality] = {loc.name_he.strip(): loc for loc in localities}
+        # Also index by normalised locality name.
+        self._by_name_he: dict[str, Locality] = {
+            _normalize_name(loc.name_he): loc for loc in localities
+        }
 
     # ------------------------------------------------------------------
     # Lookups
@@ -58,8 +56,8 @@ class LocalityCrosswalk:
         return self._by_code.get(c)
 
     def by_name(self, name_he: str) -> Locality | None:
-        """Fuzzy-ish lookup by Hebrew name (exact match after stripping whitespace)."""
-        return self._by_name_he.get(name_he.strip())
+        """Fuzzy-ish lookup by locality name after normalising case/spacing."""
+        return self._by_name_he.get(_normalize_name(name_he))
 
     def all_codes(self) -> list[str]:
         return list(self._by_code.keys())
@@ -150,8 +148,9 @@ def _fetch_from_datagov() -> list[Locality]:
             or rec.get("yishuv_name_english")
             or ""
         )
-        district_he = rec.get("שם_מחוז") or rec.get("district_name") or rec.get("MACHOZ") or ""
-        sub_district_he = rec.get("שם_נפה") or rec.get("NAFA") or ""
+        district_he = _district_name_he(rec)
+        district_en = _district_name_en(district_he)
+        sub_district_he = rec.get("שם_נפה") or rec.get("NAFA") or rec.get("לשכה") or ""
         pop = rec.get("סה_כ") or rec.get("total_population") or None
 
         if not code or not name_he:
@@ -164,8 +163,10 @@ def _fetch_from_datagov() -> list[Locality]:
                     name_he=name_he.strip(),
                     name_en=name_en.strip(),
                     district_he=district_he.strip(),
+                    district_en=district_en,
                     sub_district_he=sub_district_he.strip(),
                     population=int(pop) if pop else None,
+                    source="data.gov.il",
                 )
             )
         except (ValueError, TypeError):
@@ -191,9 +192,11 @@ def _load_seed_csv() -> list[Locality]:
                         name_he=row["locality_name_he"].strip(),
                         name_en=row.get("locality_name_en", "").strip(),
                         district_he=row.get("district_he", "").strip(),
+                        district_en=_district_name_en(row.get("district_he", "").strip()),
                         population=int(row["population_approx"])
                         if row.get("population_approx")
                         else None,
+                        source="seed_csv",
                     )
                 )
             except (KeyError, ValueError) as exc:
@@ -206,3 +209,44 @@ def _load_seed_csv() -> list[Locality]:
 def get_crosswalk() -> LocalityCrosswalk:
     """Cached singleton crosswalk for use throughout the pipeline."""
     return LocalityCrosswalk.load()
+
+
+def _normalize_name(name: str) -> str:
+    return " ".join(name.replace("-", " - ").split()).strip().lower()
+
+
+def _district_name_he(record: dict[str, object]) -> str:
+    explicit = str(
+        record.get("שם_מחוז") or record.get("district_name") or record.get("MACHOZ") or ""
+    ).strip()
+    if explicit:
+        return explicit
+
+    raw_code = record.get("סמל_נפה") or record.get("NAFA_CODE")
+    try:
+        nafa_code = int(str(raw_code).strip())
+    except (TypeError, ValueError):
+        return ""
+
+    district_prefix = int(str(nafa_code)[0])
+    return {
+        1: "ירושלים",
+        2: "הצפון",
+        3: "חיפה",
+        4: "המרכז",
+        5: "תל אביב",
+        6: "הדרום",
+        7: "יהודה ושומרון",
+    }.get(district_prefix, "")
+
+
+def _district_name_en(district_he: str) -> str:
+    return {
+        "ירושלים": "Jerusalem",
+        "הצפון": "North",
+        "חיפה": "Haifa",
+        "המרכז": "Center",
+        "תל אביב": "Tel Aviv",
+        "הדרום": "South",
+        "יהודה ושומרון": "Judea and Samaria",
+    }.get(district_he, "")

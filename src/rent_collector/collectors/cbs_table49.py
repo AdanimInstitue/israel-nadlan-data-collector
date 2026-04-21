@@ -102,7 +102,7 @@ class CBSTable49Collector(BaseCollector):
             resp = client.get(url, raise_for_status=False)
             if resp.status_code == 200:
                 console.log(f"[green]CBS Table 4.9 Excel downloaded from {url}[/green]")
-                return resp.content
+                return bytes(resp.content)
             console.log(f"[yellow]CBS Table 4.9 Excel: HTTP {resp.status_code} at {url}[/yellow]")
         except Exception as exc:
             logger.debug("Excel download failed: %s", exc)
@@ -116,7 +116,7 @@ class CBSTable49Collector(BaseCollector):
             resp = client.get(url, raise_for_status=False)
             if resp.status_code == 200:
                 console.log(f"[green]CBS Table 4.9 PDF downloaded from {url}[/green]")
-                return resp.content
+                return bytes(resp.content)
         except Exception as exc:
             logger.debug("PDF download failed: %s", exc)
         return None
@@ -280,7 +280,7 @@ def _extract_table49_entities(
 
 def _clean_table49_label(label: str) -> str:
     label = re.sub(r"\s*-\s*\d+\s*$", "", label).strip()
-    return label.replace("Tiqwa", "Tiqwa").strip()
+    return label
 
 
 def _resolve_table49_location(city_label: str) -> tuple[str, str]:

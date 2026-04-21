@@ -1,8 +1,25 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pandas as pd
+
+from rent_collector.collectors.base import BaseCollector
 from rent_collector.collectors.cbs_table49 import _extract_table49_entities
 from rent_collector.models import DataSource, RentObservation, RoomGroup
-from rent_collector.pipeline import _merge_observations
+from rent_collector.pipeline import (
+    _merge_observations,
+    _save_crosswalk,
+    _validate,
+    probe_all,
+    run_pipeline,
+)
+from tests.helpers import make_crosswalk
+
+
+class _FailingCollector(BaseCollector):
+    def collect(self):
+        raise RuntimeError("boom")
 
 
 def test_merge_observations_prefers_higher_priority_source() -> None:
@@ -39,8 +56,6 @@ def test_merge_observations_prefers_higher_priority_source() -> None:
 
 
 def test_extract_table49_entities_uses_latest_value_column() -> None:
-    import pandas as pd
-
     df = pd.DataFrame(
         [
             [None, None, None],
@@ -64,3 +79,92 @@ def test_extract_table49_entities_uses_latest_value_column() -> None:
     assert extracted["city"].tolist() == ["Tel Aviv", "Tel Aviv", "Tel Aviv", "Tel Aviv"]
     assert extracted["room_group"].tolist() == ["2.0", "3.0", "4.0", "5+"]
     assert extracted["avg_rent_nis"].tolist() == [5400.0, 7000.0, 8600.0, 10900.0]
+
+
+def test_save_crosswalk_matches_documented_schema(tmp_path: Path) -> None:
+    path = tmp_path / "locality_crosswalk.csv"
+
+    _save_crosswalk(make_crosswalk(), path)
+
+    df = pd.read_csv(path)
+    assert list(df.columns) == [
+        "locality_code",
+        "locality_name_he",
+        "locality_name_en",
+        "district_he",
+        "district_en",
+        "population_approx",
+        "source",
+    ]
+
+
+def test_validate_reports_informational_baseline_and_bounds(capsys) -> None:
+    df = pd.DataFrame(
+        [
+            {"locality_code": "5000", "source": DataSource.NADLAN.value, "rent_nis": 7999},
+            {"locality_code": "9000", "source": DataSource.CBS_TABLE49.value, "rent_nis": 2575},
+        ]
+    )
+
+    _validate(df, expected_total_2022=131_000_000)
+    output = capsys.readouterr().out
+
+    assert "informational only" in output
+    assert "not directly comparable" in output
+    assert "Rent bounds check passed" in output
+
+
+def test_run_pipeline_handles_unknown_sources_and_failures(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("rent_collector.pipeline.get_crosswalk", make_crosswalk)
+    monkeypatch.setattr(
+        "rent_collector.pipeline.NadlanCollector", lambda dry_run=False: _FailingCollector()
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSTable49Collector", lambda dry_run=False: _FailingCollector()
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSApiCollector",
+        lambda dry_run=False, scan_catalog=False: _FailingCollector(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.BoIHedonicCollector", lambda dry_run=False: _FailingCollector()
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.DataGovILCollector", lambda dry_run=False: _FailingCollector()
+    )
+
+    df = run_pipeline(
+        sources=["unknown-source", "nadlan"],
+        output_path=tmp_path / "out.csv",
+        crosswalk_path=tmp_path / "crosswalk.csv",
+    )
+
+    assert df.empty
+
+
+def test_probe_all_aggregates_statuses(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "rent_collector.pipeline.NadlanCollector",
+        lambda: type("C", (), {"probe": lambda self: {"ok": True}})(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSApiCollector",
+        lambda: type("C", (), {"probe": lambda self: {"ok": False}})(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.CBSTable49Collector",
+        lambda: type("C", (), {"probe": lambda self: {"ok": True}})(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.BoIHedonicCollector",
+        lambda: type("C", (), {"probe": lambda self: {"ok": True}})(),
+    )
+    monkeypatch.setattr(
+        "rent_collector.pipeline.DataGovILCollector",
+        lambda: type("C", (), {"probe": lambda self: {"ok": True}})(),
+    )
+
+    results = probe_all()
+
+    assert results["nadlan"]["ok"] is True
+    assert results["cbs-api"]["ok"] is False

@@ -127,7 +127,7 @@ Within a single source, the most recent quarter's value is preferred.
 
 ## HTTP Client
 
-`utils/http_client.py` provides a `RateLimitedSession` wrapping `httpx.Client` with:
+`utils/http_client.py` provides a `RateLimitedSession` wrapping `requests.Session` with:
 
 - **Per-host rate limiting:** 1.2 s delay between requests to the same host
 - **Tenacity retry:** 4 attempts, exponential backoff starting at 2 s, retries on 5xx / connection errors / timeouts
@@ -136,7 +136,7 @@ Within a single source, the most recent quarter's value is preferred.
 
 ## Locality Crosswalk
 
-`utils/locality_crosswalk.py` maintains a `LocalityCrosswalk` singleton. On first use it fetches the full CBS locality list from `data.gov.il` (CKAN resource `5c78e9fa-c2e2-4771-93ff-7f400a12f7ba`). If that request fails, it loads `data/locality_codes_seed.csv` (~50 major cities). Lookups are by CBS code (`by_code()`) or by name (`by_name()`, normalised to lowercase strip).
+`utils/locality_crosswalk.py` maintains a `LocalityCrosswalk` singleton. On first use it fetches the full CBS locality list from `data.gov.il` (CKAN resource `5c78e9fa-c2e2-4771-93ff-7f400a12f7ba`). If that request fails, it loads `data/locality_codes_seed.csv` (~50 major cities). Lookups are by CBS code (`by_code()`) or by a normalised locality name (`by_name()`, with case/spacing/hyphen normalisation).
 
 ## Configuration
 

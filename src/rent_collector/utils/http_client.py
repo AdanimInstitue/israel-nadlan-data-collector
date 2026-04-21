@@ -138,7 +138,7 @@ class RateLimitedSession:
     def get_bytes(self, url: str, **kwargs: Any) -> bytes:
         """GET and return raw bytes (for PDF/Excel downloads)."""
         resp = self.get(url, raise_for_status=True, **kwargs)
-        return resp.content
+        return bytes(resp.content)
 
     def close(self) -> None:
         self._session.close()

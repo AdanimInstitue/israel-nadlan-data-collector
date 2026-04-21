@@ -129,6 +129,17 @@ def test_run_pipeline_writes_crosswalk_and_output(monkeypatch, tmp_path: Path) -
     }
     assert written.loc[written["locality_code"].astype(str) == "5000", "rent_nis"].max() == 8427
 
+    crosswalk_written = pd.read_csv(crosswalk_path)
+    assert list(crosswalk_written.columns) == [
+        "locality_code",
+        "locality_name_he",
+        "locality_name_en",
+        "district_he",
+        "district_en",
+        "population_approx",
+        "source",
+    ]
+
 
 def test_run_pipeline_dry_run_returns_empty_without_writing(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("rent_collector.pipeline.get_crosswalk", make_crosswalk)
