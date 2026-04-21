@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from rent_collector.config import RENT_BENCHMARKS_CSV
+from rent_collector.pipeline import ValidationFailedError
 
 console = Console()
 
@@ -90,14 +91,17 @@ def main(
 
     sources_list = list(source) if source else None  # None = all
 
-    df = run_pipeline(
-        sources=sources_list,
-        dry_run=dry_run,
-        validate=validate,
-        expected_total_2022=expected_total_2022,
-        scan_catalog=scan_catalog,
-        output_path=Path(output),
-    )
+    try:
+        df = run_pipeline(
+            sources=sources_list,
+            dry_run=dry_run,
+            validate=validate,
+            expected_total_2022=expected_total_2022,
+            scan_catalog=scan_catalog,
+            output_path=Path(output),
+        )
+    except ValidationFailedError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if df.empty and not dry_run:
         console.print("[red]No data collected.[/red]")

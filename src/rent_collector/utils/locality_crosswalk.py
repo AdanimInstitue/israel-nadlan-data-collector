@@ -52,7 +52,10 @@ class LocalityCrosswalk:
 
     def by_code_padded(self, code: str | int) -> Locality | None:
         """Accept both '5000' and 5000 and leading-zero variants."""
-        c = str(int(code))  # normalise: '05000' → '5000'
+        try:
+            c = str(int(code))  # normalise: '05000' → '5000'
+        except (TypeError, ValueError):
+            return None
         return self._by_code.get(c)
 
     def by_name(self, name_he: str) -> Locality | None:

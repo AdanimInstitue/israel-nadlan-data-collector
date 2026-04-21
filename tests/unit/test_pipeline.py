@@ -3,11 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from rent_collector.collectors.base import BaseCollector
 from rent_collector.collectors.cbs_table49 import _extract_table49_entities
 from rent_collector.models import DataSource, RentObservation, RoomGroup
 from rent_collector.pipeline import (
+    ValidationFailedError,
     _merge_observations,
     _save_crosswalk,
     _validate,
@@ -53,6 +55,38 @@ def test_merge_observations_prefers_higher_priority_source() -> None:
     assert len(merged) == 1
     assert merged.iloc[0]["source"] == DataSource.NADLAN
     assert merged.iloc[0]["rent_nis"] == 7999
+
+
+def test_merge_observations_prefers_newer_row_within_same_source() -> None:
+    observations = [
+        RentObservation(
+            locality_code="5000",
+            locality_name_he="תל אביב - יפו",
+            locality_name_en="Tel Aviv - Yafo",
+            room_group=RoomGroup.R3_0,
+            median_rent_nis=7600,
+            source=DataSource.NADLAN,
+            year=2024,
+            quarter=4,
+        ),
+        RentObservation(
+            locality_code="5000",
+            locality_name_he="תל אביב - יפו",
+            locality_name_en="Tel Aviv - Yafo",
+            room_group=RoomGroup.R3_0,
+            median_rent_nis=7999,
+            source=DataSource.NADLAN,
+            year=2025,
+            quarter=1,
+        ),
+    ]
+
+    merged = _merge_observations(observations)
+
+    assert len(merged) == 1
+    assert merged.iloc[0]["rent_nis"] == 7999
+    assert merged.iloc[0]["year"] == 2025
+    assert merged.iloc[0]["quarter"] == 1
 
 
 def test_extract_table49_entities_uses_latest_value_column() -> None:
@@ -112,6 +146,27 @@ def test_validate_reports_informational_baseline_and_bounds(capsys) -> None:
     assert "informational only" in output
     assert "not directly comparable" in output
     assert "Rent bounds check passed" in output
+
+
+def test_validate_raises_for_empty_missing_or_out_of_bounds() -> None:
+    with pytest.raises(ValidationFailedError, match="Empty DataFrame"):
+        _validate(pd.DataFrame(), expected_total_2022=None)
+
+    with pytest.raises(ValidationFailedError, match="missing rent_nis"):
+        _validate(
+            pd.DataFrame(
+                [{"locality_code": "5000", "source": DataSource.NADLAN.value, "rent_nis": None}]
+            ),
+            expected_total_2022=None,
+        )
+
+    with pytest.raises(ValidationFailedError, match="rent bounds check failed"):
+        _validate(
+            pd.DataFrame(
+                [{"locality_code": "5000", "source": DataSource.NADLAN.value, "rent_nis": 300}]
+            ),
+            expected_total_2022=None,
+        )
 
 
 def test_run_pipeline_handles_unknown_sources_and_failures(monkeypatch, tmp_path: Path) -> None:

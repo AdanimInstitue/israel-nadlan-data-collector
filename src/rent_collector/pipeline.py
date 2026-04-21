@@ -44,6 +44,10 @@ SOURCE_PRIORITY: list[DataSource] = [
 ]
 
 
+class ValidationFailedError(ValueError):
+    """Raised when pipeline validation detects publish-blocking output issues."""
+
+
 def run_pipeline(
     *,
     sources: list[str] | None = None,
@@ -180,13 +184,26 @@ def _merge_observations(observations: list[RentObservation]) -> pd.DataFrame:
     # Add priority column for sorting (lower = better)
     priority_map = {src: i for i, src in enumerate(SOURCE_PRIORITY)}
     df["_priority"] = df["source"].map(lambda s: priority_map.get(DataSource(s), 99))
+    df["_sort_year"] = pd.to_numeric(df["year"], errors="coerce").fillna(-1).astype(int)
+    df["_sort_quarter"] = pd.to_numeric(df["quarter"], errors="coerce").fillna(-1).astype(int)
+    df["_sort_rent"] = pd.to_numeric(df["rent_nis"], errors="coerce").fillna(-1.0)
 
-    # Sort by priority so best rows come first
-    df = df.sort_values("_priority")
+    # Sort by source priority first, then prefer the most recent within-source row.
+    df = df.sort_values(
+        by=[
+            "_priority",
+            "_sort_year",
+            "_sort_quarter",
+            "_sort_rent",
+            "locality_code",
+            "room_group",
+        ],
+        ascending=[True, False, False, False, True, True],
+    )
 
     # Deduplicate: keep the best row per (locality_code, room_group)
     df = df.drop_duplicates(subset=["locality_code", "room_group"], keep="first")
-    df = df.drop(columns=["_priority"])
+    df = df.drop(columns=["_priority", "_sort_year", "_sort_quarter", "_sort_rent"])
     df = df.sort_values(["locality_code", "room_group"]).reset_index(drop=True)
 
     return df
@@ -220,8 +237,10 @@ def _validate(df: pd.DataFrame, expected_total_2022: float | None) -> None:
     console.rule("Validation")
 
     if df.empty:
-        console.log("[red]Empty DataFrame — nothing to validate.[/red]")
-        return
+        raise ValidationFailedError("Empty DataFrame — nothing to validate.")
+
+    if df["rent_nis"].isna().any():
+        raise ValidationFailedError("Validation failed: output contains missing rent_nis values.")
 
     total_monthly = df["rent_nis"].sum()
     total_annual = total_monthly * 12
@@ -240,14 +259,16 @@ def _validate(df: pd.DataFrame, expected_total_2022: float | None) -> None:
     min_rent = float(df["rent_nis"].min())
     max_rent = float(df["rent_nis"].max())
     if min_rent < 500 or max_rent > 20_000:
-        console.log(
-            f"  [red]✗ Rent bounds check failed (min={min_rent:,.0f}, max={max_rent:,.0f}).[/red]"
+        message = (
+            "Validation failed: rent bounds check failed "
+            f"(min={min_rent:,.0f}, max={max_rent:,.0f})."
         )
-    else:
-        console.log(
-            "  [green]✓ Rent bounds check passed "
-            f"(min={min_rent:,.0f}, max={max_rent:,.0f}).[/green]"
-        )
+        console.log(f"  [red]✗ {message}[/red]")
+        raise ValidationFailedError(message)
+
+    console.log(
+        f"  [green]✓ Rent bounds check passed (min={min_rent:,.0f}, max={max_rent:,.0f}).[/green]"
+    )
 
     # Coverage
     cities_covered = df["locality_code"].nunique()

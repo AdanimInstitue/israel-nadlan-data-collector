@@ -115,6 +115,8 @@ def test_load_seed_csv_and_normalized_lookup(monkeypatch, tmp_path) -> None:
     assert localities[0].district_en == "Tel Aviv"
     assert localities[0].source == "seed_csv"
     assert crosswalk.by_code_padded("05000") is not None
+    assert crosswalk.by_code_padded("DIST_TA") is None
+    assert crosswalk.by_code_padded("") is None
     assert crosswalk.by_name(" תל אביב-יפו ") is not None
     assert len(crosswalk) == 1
     assert crosswalk.all_codes() == ["5000"]
