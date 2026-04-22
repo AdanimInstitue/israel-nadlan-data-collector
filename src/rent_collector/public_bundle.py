@@ -53,6 +53,8 @@ def validate_public_bundle(
     bundle_dir: Path = PUBLIC_BUNDLE_DIR, *, root_dir: Path = ROOT_DIR
 ) -> list[str]:
     errors: list[str] = []
+    resolved_root_dir = root_dir.resolve()
+    resolved_bundle_dir = bundle_dir.resolve()
     manifest_path = bundle_dir / "manifest.json"
     if not manifest_path.exists():
         return ["manifest.json is missing"]
@@ -64,7 +66,18 @@ def validate_public_bundle(
         relative_path_obj = Path(relative_path)
         if relative_path_obj.is_absolute():
             errors.append(f"absolute path leaked into manifest: {relative_path}")
-        absolute_path = root_dir / relative_path_obj
+            continue
+        absolute_path = (root_dir / relative_path_obj).resolve()
+        try:
+            absolute_path.relative_to(resolved_root_dir)
+        except ValueError:
+            errors.append(f"path escaped bundle root: {relative_path}")
+            continue
+        try:
+            absolute_path.relative_to(resolved_bundle_dir)
+        except ValueError:
+            errors.append(f"path escaped bundle directory: {relative_path}")
+            continue
         if not absolute_path.exists():
             errors.append(f"missing bundle file: {relative_path}")
 

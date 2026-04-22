@@ -55,10 +55,13 @@ def write_source_inventory_csv(path: Path) -> None:
 
 
 def build_file_artifact(root_dir: Path, path: Path, *, rows: int | None = None) -> FileArtifact:
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8192), b""):
+            hasher.update(chunk)
     return FileArtifact(
         relative_path=path.relative_to(root_dir).as_posix(),
-        sha256=digest,
+        sha256=hasher.hexdigest(),
         bytes=path.stat().st_size,
         rows=rows,
     )

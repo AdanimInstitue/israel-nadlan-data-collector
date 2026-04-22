@@ -6,7 +6,11 @@ from pathlib import Path
 import pandas as pd
 
 from rent_collector import __version__
-from rent_collector.provenance import write_manifest, write_source_inventory_csv
+from rent_collector.provenance import (
+    build_file_artifact,
+    write_manifest,
+    write_source_inventory_csv,
+)
 from rent_collector.public_bundle import build_public_bundle, validate_public_bundle
 
 
@@ -92,9 +96,42 @@ def test_validate_public_bundle_uses_passed_root_dir_and_detects_absolute_paths(
     errors = validate_public_bundle(bundle_dir, root_dir=tmp_path)
 
     assert "absolute path leaked into manifest: /absolute/path.csv" in errors
-    assert "missing bundle file: /absolute/path.csv" in errors
+    assert "missing bundle file: /absolute/path.csv" not in errors
     assert "rent_benchmarks.csv is missing" in errors
     assert "locality_crosswalk.csv is missing" in errors
+
+
+def test_validate_public_bundle_rejects_paths_outside_root(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "custom_bundle"
+    bundle_dir.mkdir()
+    (bundle_dir / "source_inventory.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "rent_benchmarks.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "locality_crosswalk.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "manifest.json").write_text(
+        json.dumps({"files": [{"relative_path": "../outside.csv"}]}),
+        encoding="utf-8",
+    )
+
+    errors = validate_public_bundle(bundle_dir, root_dir=tmp_path)
+
+    assert errors == ["path escaped bundle root: ../outside.csv"]
+
+
+def test_validate_public_bundle_rejects_paths_outside_bundle_dir(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "custom_bundle"
+    bundle_dir.mkdir()
+    (bundle_dir / "source_inventory.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "rent_benchmarks.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "locality_crosswalk.csv").write_text("col\n1\n", encoding="utf-8")
+    (tmp_path / "other.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "manifest.json").write_text(
+        json.dumps({"files": [{"relative_path": "other.csv"}]}),
+        encoding="utf-8",
+    )
+
+    errors = validate_public_bundle(bundle_dir, root_dir=tmp_path)
+
+    assert errors == ["path escaped bundle directory: other.csv"]
 
 
 def test_validate_public_bundle_accepts_existing_relative_files(tmp_path: Path) -> None:
@@ -124,3 +161,18 @@ def test_validate_public_bundle_reports_missing_source_inventory(tmp_path: Path)
     errors = validate_public_bundle(bundle_dir, root_dir=tmp_path)
 
     assert errors == ["source_inventory.csv is missing"]
+
+
+def test_build_file_artifact_hashes_large_files_in_chunks(tmp_path: Path) -> None:
+    path = tmp_path / "artifact.csv"
+    path.write_bytes(b"a" * 10000)
+
+    artifact = build_file_artifact(tmp_path, path, rows=1)
+
+    assert artifact.relative_path == "artifact.csv"
+    assert artifact.bytes == 10000
+    assert artifact.rows == 1
+    assert (
+        artifact.sha256
+        == "27dd1f61b867b6a0f6e9d8a41c43231de52107e53ae424de8f847b821db4b711"
+    )
