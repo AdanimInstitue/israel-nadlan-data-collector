@@ -1,5 +1,5 @@
 """
-CLI entry point: `rent-collector`, `rent-collect`, or `python scripts/collect.py`.
+CLI entry point for the public collector.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import click
 from rich.console import Console
 from rich.logging import RichHandler
 
+from rent_collector import __version__
 from rent_collector.config import (
     LOCALITY_CROSSWALK_CSV,
     RENT_BENCHMARKS_CSV,
@@ -27,8 +28,25 @@ from rent_collector.config import (
     RUN_ARTIFACTS_DIR,
 )
 from rent_collector.pipeline import ValidationFailedError
+from rent_collector.provenance import write_manifest, write_source_inventory_csv
+from rent_collector.public_bundle import (
+    PUBLIC_BUNDLE_DIR,
+    PUBLIC_MANIFEST_JSON,
+    PUBLIC_SOURCE_INVENTORY_CSV,
+    build_public_bundle,
+    validate_public_bundle,
+)
+from rent_collector.source_registry import list_sources
 
 console = Console()
+
+_SOURCE_PIPELINE_KEYS = {
+    "nadlan_gov_il": "nadlan",
+    "cbs_api": "cbs-api",
+    "cbs_table49": "cbs-table49",
+    "boi_hedonic": "boi-hedonic",
+    "data_gov_il_locality_registry": "data-gov-il",
+}
 
 
 @dataclass
@@ -159,7 +177,41 @@ def _setup_logging(verbose: bool) -> None:
     )
 
 
-@click.command()
+def _subcommand_conflicting_options(
+    ctx: click.Context,
+    *,
+    source: tuple[str, ...],
+    dry_run: bool,
+    probe: bool,
+    scan_catalog: bool,
+    validate: bool,
+    expected_total_2022: float | None,
+    run_dir: Path | None,
+    verbose: bool,
+) -> list[str]:
+    conflicts: list[str] = []
+    if source:
+        conflicts.append("--source")
+    if dry_run:
+        conflicts.append("--dry-run")
+    if probe:
+        conflicts.append("--probe")
+    if scan_catalog:
+        conflicts.append("--scan-catalog")
+    if validate:
+        conflicts.append("--validate")
+    if expected_total_2022 is not None:
+        conflicts.append("--reference-total-2022/--expected-total-2022")
+    if ctx.get_parameter_source("output") is click.core.ParameterSource.COMMANDLINE:
+        conflicts.append("--output")
+    if ctx.get_parameter_source("run_dir") is click.core.ParameterSource.COMMANDLINE:
+        conflicts.append("--run-dir")
+    if verbose:
+        conflicts.append("--verbose")
+    return conflicts
+
+
+@click.group(invoke_without_command=True)
 @click.option(
     "--source",
     multiple=True,
@@ -207,7 +259,9 @@ def _setup_logging(verbose: bool) -> None:
     help="Optional run-artifact directory. Default: var/runs/<timestamp>/",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Debug logging.")
+@click.pass_context
 def main(
+    ctx: click.Context,
     source: tuple[str, ...],
     dry_run: bool,
     probe: bool,
@@ -218,7 +272,26 @@ def main(
     run_dir: Path | None,
     verbose: bool,
 ) -> None:
-    """Collect official Israeli rental-price benchmarks from government sources."""
+    """Collect and package public-safe Israeli rent benchmarks."""
+    if ctx.invoked_subcommand is not None:
+        conflicts = _subcommand_conflicting_options(
+            ctx,
+            source=source,
+            dry_run=dry_run,
+            probe=probe,
+            scan_catalog=scan_catalog,
+            validate=validate,
+            expected_total_2022=expected_total_2022,
+            run_dir=run_dir,
+            verbose=verbose,
+        )
+        if conflicts:
+            raise click.UsageError(
+                "Top-level execution options cannot be combined with subcommands: "
+                + ", ".join(conflicts)
+            )
+        return
+
     output_path = Path(output)
     crosswalk_path = LOCALITY_CROSSWALK_CSV
     actual_run_dir = run_dir or _allocate_run_dir(_default_runs_dir())
@@ -288,6 +361,51 @@ def main(
     finally:
         _write_run_record(record)
         _update_latest_pointers(actual_run_dir.parent, actual_run_dir)
+
+
+@main.group("sources")
+def sources_group() -> None:
+    """Inspect registered public-safe sources."""
+
+
+@sources_group.command("list")
+def list_sources_command() -> None:
+    for source in list_sources():
+        pipeline_key = _SOURCE_PIPELINE_KEYS.get(source.source_id, "n/a")
+        console.print(
+            f"{source.source_id}\tcollector={pipeline_key}\t{source.status}\t"
+            f"{source.display_name}\t{source.homepage_url}"
+        )
+
+
+@main.command("build-public-bundle")
+@click.option("--validate/--no-validate", "bundle_validate", default=True)
+def build_public_bundle_command(bundle_validate: bool) -> None:
+    manifest = build_public_bundle(validate=bundle_validate)
+    console.print(f"Wrote public bundle manifest to {PUBLIC_MANIFEST_JSON}")
+    console.print(json.dumps(manifest, indent=2, ensure_ascii=False))
+
+
+@main.command("validate-public-bundle")
+def validate_public_bundle_command() -> None:
+    errors = validate_public_bundle()
+    if errors:
+        raise click.ClickException("\n".join(errors))
+    console.print("Public bundle validation passed.")
+
+
+@main.command("write-manifest")
+def write_manifest_command() -> None:
+    PUBLIC_BUNDLE_DIR.mkdir(parents=True, exist_ok=True)
+    write_source_inventory_csv(PUBLIC_SOURCE_INVENTORY_CSV)
+    manifest = write_manifest(
+        root_dir=ROOT_DIR,
+        output_path=PUBLIC_MANIFEST_JSON,
+        artifact_paths=[PUBLIC_SOURCE_INVENTORY_CSV],
+        row_counts={"source_inventory.csv": len(list_sources())},
+        collector_version=__version__,
+    )
+    console.print(json.dumps(manifest, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

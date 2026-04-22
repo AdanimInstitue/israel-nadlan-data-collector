@@ -1,61 +1,32 @@
-# Agent Rules
+# AGENTS
 
-## Scope
-- Work in `israel-rent-data-collector` unless a task explicitly requires `../israel-rent-data`.
-- Do not modify or delete the detailed planning and handoff docs under `docs/` when creating short agent-facing context files.
+## Commands
 
-## Required Commands
-- Install: `pip install -e ".[dev]"`
-- Local CI parity: `pre-commit run --all-files`
-- CLI sanity check: `python scripts/collect.py --help`
-- Probe sources: `python scripts/collect.py --probe`
-- Dry run: `python scripts/collect.py --source nadlan --source cbs-table49 --source cbs-api --source boi-hedonic --dry-run`
-- Full validated run: `python scripts/collect.py --validate`
-- Validation with 2022 context baseline: `python scripts/collect.py --validate --reference-total-2022 131000000`
+- Install: `python -m pip install -e ".[dev]"`
+- Lint: `ruff check src tests`
+- Type check: `mypy src`
 - Unit tests: `pytest -m "not integration"`
 - Integration tests: `pytest -m integration`
-- Lint: `ruff check .`
-- Format check: `ruff format --check .`
-- Type check: `mypy src`
+- Full test suite: `pytest`
+- Build public bundle: `indc build-public-bundle`
+- Validate public bundle: `indc validate-public-bundle`
 
-## Output Rules
-- Main output must be written to `data/output/rent_benchmarks.csv`.
-- Crosswalk output must be written to `data/output/locality_crosswalk.csv`.
-- Do not publish to `../israel-rent-data/` unless validation passes.
-- After a validated run, copy:
-  - `data/output/rent_benchmarks.csv` -> `../israel-rent-data/rent_benchmarks.csv`
-  - `data/output/locality_crosswalk.csv` -> `../israel-rent-data/locality_crosswalk.csv`
+## Branching
 
-## Git And PR Rules
-- Feature branches should use the `codex/` prefix by default.
-- Use the repo-specific GitHub MCPs first when they support the action.
-- Fall back to `gh` only for unsupported GitHub operations such as PR creation or metadata updates the MCP cannot perform.
-- Do not treat feature work as complete until the implementation branch is pushed and a non-draft PR exists with a detailed body.
-- If the repo has a relevant milestone, assign it before handoff.
-- Do not stage unrelated local changes. Leave pre-existing out-of-scope edits alone.
+- Use `codex/<topic>` or `refactor/<topic>` for agent branches.
+- Keep changes scoped to this repository only.
 
-## Code Boundaries
-- Python package root: `src/rent_collector/`.
-- CLI entrypoint: `scripts/collect.py` and `src/rent_collector/cli.py`.
-- Pipeline orchestration belongs in `src/rent_collector/pipeline.py`.
-- Source-specific fetch and parse logic belongs only in `src/rent_collector/collectors/`.
-- Shared schemas belong in `src/rent_collector/models.py`.
-- Runtime configuration belongs in `src/rent_collector/config.py`.
-- Shared HTTP and locality utilities belong in `src/rent_collector/utils/`.
-- Generated CSVs belong under `data/output/`; do not hardcode output paths outside the repo.
+## Hard Constraints
 
-## Data Source Constraints
-- Use only official government or Bank of Israel sources already documented in this repo.
-- Do not add Madlan, Yad2, or other commercial real-estate sources.
-- Prefer nadlan data over CBS Table 4.9, CBS Table 4.9 over CBS API, and model fallback last.
+- Treat this repository as a complete public collector project.
+- Keep docs, tests, fixtures, configs, and manifests public-safe.
+- Do not reference private repositories, private workflows, sibling paths, or hidden enrichment in tracked public files.
+- Do not add acquisition guidance for sources with unclear reuse posture.
+- Keep source-rights wording conservative and source-specific.
 
-## Validation Constraints
-- Validation enforces output integrity and sanity bounds; the 2022 facility-level total is reference-only context, not a direct pass/fail gate for the locality-by-room table.
-- Sanity bounds for published output:
-  - no rows with `rent_nis < 500`
-  - no rows with `rent_nis > 20000`
+## Architecture Boundaries
 
-## Context Files
-- Keep `AGENTS.md` static and short.
-- Keep `.agent-plan.md` limited to current branch state, immediate next steps, and links to deeper docs.
-- Use `llms.txt` as a high-density architecture index only.
+- Collector code lives under `src/rent_collector/`.
+- Public source configs live under `configs/sources/`.
+- Public release docs live under `docs/`.
+- Release artifacts must stay under `data/public_bundle/` and use relative paths in manifests.
