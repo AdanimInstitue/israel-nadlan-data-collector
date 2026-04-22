@@ -293,7 +293,9 @@ def main(
                 raise click.ClickException(str(exc)) from exc
 
             record.exit_code = 0
-    except click.ClickException:
+    except click.ClickException as exc:
+        if record.error is None:
+            record.error = exc.format_message()
         record.exit_code = record.exit_code if record.exit_code is not None else 1
         raise
     except click.exceptions.Exit as exc:

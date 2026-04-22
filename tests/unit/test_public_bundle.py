@@ -33,7 +33,7 @@ def test_write_manifest_uses_relative_paths(tmp_path: Path) -> None:
         output_path=bundle_dir / "manifest.json",
         artifact_paths=[inventory_path],
         row_counts={"source_inventory.csv": 1},
-        collector_version="0.3.0",
+        collector_version=__version__,
     )
 
     assert manifest["files"][0]["relative_path"] == "data/public_bundle/source_inventory.csv"

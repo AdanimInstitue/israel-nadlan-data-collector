@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "israel-nadlan-data-collector"
-version = "0.2.0"
+version = "0.3.0"
 description = "Public-safe collector for Israeli locality reference data"
 readme = "README.md"
 requires-python = ">=3.11"
