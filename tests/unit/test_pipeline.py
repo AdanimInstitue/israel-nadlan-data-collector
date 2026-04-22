@@ -7,6 +7,7 @@ from rent_collector.models import Locality
 from rent_collector.pipeline import (
     ValidationFailedError,
     _crosswalk_dataframe,
+    _normalize_sources,
     _validate_crosswalk,
     probe_all,
     run_pipeline,
@@ -94,3 +95,44 @@ def test_crosswalk_dataframe_preserves_expected_columns() -> None:
         "population_approx",
         "source",
     ]
+
+
+def test_normalize_sources_handles_none_all_unknown_and_valid(caplog) -> None:
+    assert _normalize_sources(None) == ["data-gov-il"]
+    assert _normalize_sources(["all"]) == ["data-gov-il"]
+    assert _normalize_sources(["data-gov-il"]) == ["data-gov-il"]
+    assert _normalize_sources(["unknown"]) == ["data-gov-il"]
+
+
+def test_validate_crosswalk_rejects_empty_and_blank_codes() -> None:
+    with pytest.raises(ValidationFailedError, match="Crosswalk is empty"):
+        _validate_crosswalk(
+            pd.DataFrame(
+                columns=[
+                    "locality_code",
+                    "locality_name_he",
+                    "locality_name_en",
+                    "district_he",
+                    "district_en",
+                    "population_approx",
+                    "source",
+                ]
+            )
+        )
+
+    with pytest.raises(ValidationFailedError, match="blank locality_code"):
+        _validate_crosswalk(
+            pd.DataFrame(
+                [
+                    {
+                        "locality_code": None,
+                        "locality_name_he": "תל אביב - יפו",
+                        "locality_name_en": "",
+                        "district_he": "תל אביב",
+                        "district_en": "Tel Aviv",
+                        "population_approx": None,
+                        "source": "data.gov.il",
+                    }
+                ]
+            )
+        )

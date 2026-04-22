@@ -36,9 +36,7 @@ def test_source_all_maps_to_default_all_sources(monkeypatch, tmp_path) -> None:
         return pd.DataFrame([{"locality_code": "5000"}])
 
     monkeypatch.setattr("rent_collector.pipeline.run_pipeline", _run_pipeline)
-    result = CliRunner().invoke(
-        main, ["--source", "all", "--output", str(tmp_path / "out.csv")]
-    )
+    result = CliRunner().invoke(main, ["--source", "all", "--output", str(tmp_path / "out.csv")])
     assert result.exit_code == 0
     assert captured["sources"] == ["all"]
 
@@ -164,3 +162,13 @@ def test_full_command_records_unexpected_exceptions(monkeypatch, tmp_path) -> No
     run_record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_record["status"] == "failure"
     assert run_record["error"] == "boom"
+
+
+def test_csv_row_count_handles_missing_and_existing_files(tmp_path) -> None:
+    from rent_collector.cli import _csv_row_count
+
+    assert _csv_row_count(tmp_path / "missing.csv") == 0
+
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text("a\n1\n2\n", encoding="utf-8")
+    assert _csv_row_count(csv_path) == 2
