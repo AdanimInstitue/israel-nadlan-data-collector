@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+
+from rent_collector.config import LOCALITY_CROSSWALK_CSV, RENT_BENCHMARKS_CSV, ROOT_DIR
+from rent_collector.pipeline import run_pipeline
+from rent_collector.provenance import write_manifest, write_source_inventory_csv
+
+
+PUBLIC_BUNDLE_DIR = ROOT_DIR / "data" / "public_bundle"
+PUBLIC_RENT_BENCHMARKS_CSV = PUBLIC_BUNDLE_DIR / "rent_benchmarks.csv"
+PUBLIC_LOCALITY_CROSSWALK_CSV = PUBLIC_BUNDLE_DIR / "locality_crosswalk.csv"
+PUBLIC_SOURCE_INVENTORY_CSV = PUBLIC_BUNDLE_DIR / "source_inventory.csv"
+PUBLIC_MANIFEST_JSON = PUBLIC_BUNDLE_DIR / "manifest.json"
+
+
+def build_public_bundle(
+    *,
+    sources: list[str] | None = None,
+    validate: bool = True,
+) -> dict[str, object]:
+    PUBLIC_BUNDLE_DIR.mkdir(parents=True, exist_ok=True)
+    df = run_pipeline(
+        sources=sources,
+        dry_run=False,
+        validate=validate,
+        output_path=PUBLIC_RENT_BENCHMARKS_CSV,
+        crosswalk_path=PUBLIC_LOCALITY_CROSSWALK_CSV,
+    )
+    write_source_inventory_csv(PUBLIC_SOURCE_INVENTORY_CSV)
+    row_counts = {
+        PUBLIC_RENT_BENCHMARKS_CSV.name: len(df.index),
+        PUBLIC_LOCALITY_CROSSWALK_CSV.name: _csv_row_count(PUBLIC_LOCALITY_CROSSWALK_CSV),
+        PUBLIC_SOURCE_INVENTORY_CSV.name: _csv_row_count(PUBLIC_SOURCE_INVENTORY_CSV),
+    }
+    return write_manifest(
+        root_dir=ROOT_DIR,
+        output_path=PUBLIC_MANIFEST_JSON,
+        artifact_paths=[
+            PUBLIC_RENT_BENCHMARKS_CSV,
+            PUBLIC_LOCALITY_CROSSWALK_CSV,
+            PUBLIC_SOURCE_INVENTORY_CSV,
+        ],
+        row_counts=row_counts,
+        collector_version="0.2.0",
+    )
+
+
+def validate_public_bundle(bundle_dir: Path = PUBLIC_BUNDLE_DIR) -> list[str]:
+    errors: list[str] = []
+    manifest_path = bundle_dir / "manifest.json"
+    if not manifest_path.exists():
+        return ["manifest.json is missing"]
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    files = manifest.get("files", [])
+    for file_entry in files:
+        relative_path = file_entry["relative_path"]
+        if relative_path.startswith("/"):
+            errors.append(f"absolute path leaked into manifest: {relative_path}")
+        absolute_path = ROOT_DIR / relative_path
+        if not absolute_path.exists():
+            errors.append(f"missing bundle file: {relative_path}")
+
+    if not (bundle_dir / "source_inventory.csv").exists():
+        errors.append("source_inventory.csv is missing")
+    if not (bundle_dir / "rent_benchmarks.csv").exists():
+        errors.append("rent_benchmarks.csv is missing")
+    if not (bundle_dir / "locality_crosswalk.csv").exists():
+        errors.append("locality_crosswalk.csv is missing")
+    return errors
+
+
+def _csv_row_count(path: Path) -> int:
+    df = pd.read_csv(path)
+    return len(df.index)

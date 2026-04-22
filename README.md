@@ -1,130 +1,85 @@
-# israel-rent-data-collector
+# israel-nadlan-data-collector
 
-Collects official Israeli rental-price benchmarks from government and public sources,
-producing a clean `(city, room_count) → rent_benchmark_NIS` table for use in normative-rent
-calculations for out-of-home welfare care facilities.
+Public-safe collector for Israeli housing-rent benchmark data.
 
-## Purpose
+This repository fetches and normalizes named public sources, writes a public bundle with provenance metadata, and avoids any coupling to non-public workflows or repositories.
 
-Part of the Adanim Institute normative-rent project. The output of this tool feeds
-Step 2 of the normative-rent pipeline: given a care facility in a known city with a
-known number of residents, estimate the market rent it *should* be paying.
+## Supported Sources
 
-## Data sources
+The public collector currently ships adapters for these public-facing sources:
 
-See [`docs/sources.md`](docs/sources.md) for the full annotated inventory. In priority order:
+| `source_id` | Publisher | Public role |
+| --- | --- | --- |
+| `nadlan_gov_il` | Israeli government real-estate portal | locality rent observations |
+| `cbs_table49` | Central Bureau of Statistics | district and city benchmark observations |
+| `cbs_api` | Central Bureau of Statistics | public metadata and API-discoverable series support |
+| `boi_hedonic` | Bank of Israel | modeled fallback estimates derived from published source material |
+| `data_gov_il_locality_registry` | data.gov.il / CBS | locality metadata and crosswalk support |
 
-| Priority | Source | What we get |
-|----------|--------|------------|
-| 1 | nadlan.gov.il JSON API | Locality + room-group rent observations, currently average-oriented in the live payload shape |
-| 2 | CBS REST API (`api.cbs.gov.il`) | Average rent by district/city + room group |
-| 3 | CBS Table 4.9 PDF | Average rent cross-check |
-| 4 | BoI hedonic model | Model-based fallback for localities with no data |
-| 5 | CBS Locality Registry | Crosswalk: CBS code ↔ city name |
+Source metadata, terms pointers, and attribution posture are documented in [docs/source_policy.md](docs/source_policy.md).
 
-All sources are official Israeli government or public research publications.
-No scraping of Madlan, Yad2, or other commercial real-estate portals.
+## What The Collector Produces
 
-## Output
+`build-public-bundle` writes a bundle under `data/public_bundle/` containing:
 
-Running the pipeline produces `data/output/rent_benchmarks.csv`:
+- `rent_benchmarks.csv`
+- `locality_crosswalk.csv`
+- `source_inventory.csv`
+- `manifest.json`
 
-```
-locality_code, locality_name_he, locality_name_en, room_group,
-median_rent_nis, avg_rent_nis, rent_nis, source, quarter, year,
-observations_count, notes
-```
+The bundle is designed to feed the public dataset repository, but this repository remains self-contained and does not require a sibling checkout to run.
 
-And `data/output/locality_crosswalk.csv`:
-```
-locality_code, locality_name_he, locality_name_en, district_he, district_en,
-population_approx, source
-```
-
-These snippets reflect the current published CSV columns. For the full maintained schema,
-see [`docs/02_output_datasets_schema.md`](docs/02_output_datasets_schema.md).
-
-## Installation
+## Install
 
 ```bash
-cd israel-rent-data-collector
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 ```
 
-Requires Python 3.11+.
-This installs the Click CLI as `rent-collector` (and the legacy alias `rent-collect`).
-Each CLI run also writes git-ignored artifacts under `var/runs/<timestamp>/` by default,
-including `stdout.log`, `stderr.log`, and `run.json`. The latest run is pointed to by
-`var/runs/latest.json` and, when supported, `var/runs/latest/`.
+Requires Python 3.11 or newer.
 
-## Usage
+## CLI
 
 ```bash
-# Full pipeline (all sources)
-rent-collector
-
-# Legacy alias / direct script entrypoint
-rent-collect
-python scripts/collect.py
-
-# Single source
-rent-collector --source nadlan
-rent-collector --source cbs-api
-rent-collector --source cbs-table49
-rent-collector --source boi-hedonic
-
-# Dry run (probe endpoints, don't save)
-rent-collector --dry-run
-
-# Validate output shape and sanity bounds
-rent-collector --validate
-
-# Optionally print a 2022 facility-level reference baseline for context
-rent-collector --validate --reference-total-2022 131000000
-
-# Optional explicit artifact directory
-rent-collector --run-dir var/runs/manual-test --validate
+indc --help
+indc --probe
+indc --source nadlan --validate
+indc sources list
+indc build-public-bundle
+indc validate-public-bundle
+indc write-manifest
 ```
 
-## Project structure
+The legacy `rent-collector` and `rent-collect` entry points remain available as aliases.
 
-```
+## Repository Layout
+
+```text
 src/rent_collector/
-├── cli.py                   # Click CLI entry point
-├── config.py                # Configuration (timeouts, output paths, etc.)
-├── models.py                # Pydantic data models
-├── pipeline.py              # Orchestrates all collectors
-├── collectors/
-│   ├── base.py              # Abstract base collector
-│   ├── nadlan.py            # nadlan.gov.il rental medians
-│   ├── cbs_api.py           # CBS REST API (api.cbs.gov.il)
-│   ├── cbs_table49.py       # CBS Table 4.9 PDF/Excel download + parse
-│   ├── data_gov_il.py       # data.gov.il CKAN API wrapper
-│   ├── boi_hedonic.py       # Bank of Israel hedonic regression model
-└── utils/
-    ├── http_client.py       # Rate-limited HTTP client with retries
-    └── locality_crosswalk.py# Locality code registry and city-name crosswalk
-data/
-├── locality_codes_seed.csv  # Seed data for ~50 major cities (offline fallback)
-└── output/                  # Generated output (gitignored)
+  cli.py
+  source_registry.py
+  provenance.py
+  public_bundle.py
+  pipeline.py
+  collectors/
+  utils/
+configs/
+  pipelines/public_release.yaml
+  sources/
+docs/
+tests/
 ```
 
-## Notes on API stability
+## Public Scope
 
-- **nadlan.gov.il**: The JSON API is not officially documented; endpoints were reverse-
-  engineered by community projects. Multiple endpoint patterns are tried in sequence;
-  the first one that returns data wins. If all fail, the collector falls back to HTML
-  scraping of the public rental-trends pages.
-- **CBS API**: Fully documented and stable. Series IDs are listed in `sources.md`.
-- **data.gov.il**: Standard CKAN API; stable.
+- Public-facing source adapters only.
+- Synthetic or public-safe test fixtures only.
+- Rights-aware source metadata and provenance records.
+- No references to non-public systems or storage layouts.
 
 ## Development
 
 ```bash
-# Run tests
 pytest
-
-# Lint
-ruff check src/
-mypy src/
+ruff check src tests
+mypy src
 ```
