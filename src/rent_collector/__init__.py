@@ -8,4 +8,4 @@ Fetches rent data from:
   - BoI hedonic    (fallback model for localities with no data)
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

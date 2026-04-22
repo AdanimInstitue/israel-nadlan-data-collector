@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from rent_collector.config import LOCALITY_CROSSWALK_CSV, RENT_BENCHMARKS_CSV, ROOT_DIR
+from rent_collector import __version__
+from rent_collector.config import ROOT_DIR
 from rent_collector.pipeline import run_pipeline
 from rent_collector.provenance import write_manifest, write_source_inventory_csv
-
 
 PUBLIC_BUNDLE_DIR = ROOT_DIR / "data" / "public_bundle"
 PUBLIC_RENT_BENCHMARKS_CSV = PUBLIC_BUNDLE_DIR / "rent_benchmarks.csv"
@@ -45,11 +45,13 @@ def build_public_bundle(
             PUBLIC_SOURCE_INVENTORY_CSV,
         ],
         row_counts=row_counts,
-        collector_version="0.2.0",
+        collector_version=__version__,
     )
 
 
-def validate_public_bundle(bundle_dir: Path = PUBLIC_BUNDLE_DIR) -> list[str]:
+def validate_public_bundle(
+    bundle_dir: Path = PUBLIC_BUNDLE_DIR, *, root_dir: Path = ROOT_DIR
+) -> list[str]:
     errors: list[str] = []
     manifest_path = bundle_dir / "manifest.json"
     if not manifest_path.exists():
@@ -58,10 +60,11 @@ def validate_public_bundle(bundle_dir: Path = PUBLIC_BUNDLE_DIR) -> list[str]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     files = manifest.get("files", [])
     for file_entry in files:
-        relative_path = file_entry["relative_path"]
-        if relative_path.startswith("/"):
+        relative_path = str(file_entry["relative_path"])
+        relative_path_obj = Path(relative_path)
+        if relative_path_obj.is_absolute():
             errors.append(f"absolute path leaked into manifest: {relative_path}")
-        absolute_path = ROOT_DIR / relative_path
+        absolute_path = root_dir / relative_path_obj
         if not absolute_path.exists():
             errors.append(f"missing bundle file: {relative_path}")
 

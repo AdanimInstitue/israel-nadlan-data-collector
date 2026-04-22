@@ -66,7 +66,9 @@ PUBLIC_SOURCE_REGISTRY: tuple[SourceDescriptor, ...] = (
         expected_refresh_pattern="source_specific",
         citation_text="Central Bureau of Statistics public API.",
         attribution_required=True,
-        redistribution_note="Treat series-level outputs conservatively and cite the API family used.",
+        redistribution_note=(
+            "Treat series-level outputs conservatively and cite the API family used."
+        ),
         status="experimental_public",
     ),
     SourceDescriptor(
@@ -81,7 +83,9 @@ PUBLIC_SOURCE_REGISTRY: tuple[SourceDescriptor, ...] = (
         expected_refresh_pattern="paper_or_model_revision",
         citation_text="Bank of Israel rent-model source material.",
         attribution_required=True,
-        redistribution_note="Identify modeled outputs as derived estimates, not direct official tables.",
+        redistribution_note=(
+            "Identify modeled outputs as derived estimates, not direct official tables."
+        ),
         status="active",
     ),
     SourceDescriptor(

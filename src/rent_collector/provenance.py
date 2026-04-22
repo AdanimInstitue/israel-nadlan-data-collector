@@ -28,6 +28,7 @@ def write_source_inventory_csv(path: Path) -> None:
         "license_url",
         "access_method",
         "public_status",
+        "status",
         "attribution_required",
         "citation_text",
         "redistribution_note",
@@ -44,7 +45,8 @@ def write_source_inventory_csv(path: Path) -> None:
                     "terms_url": source.terms_url or "",
                     "license_url": source.license_url or "",
                     "access_method": source.access_method,
-                    "public_status": source.status,
+                    "public_status": source.source_class,
+                    "status": source.status,
                     "attribution_required": str(source.attribution_required).lower(),
                     "citation_text": source.citation_text,
                     "redistribution_note": source.redistribution_note,
@@ -70,7 +72,7 @@ def write_manifest(
     row_counts: dict[str, int],
     collector_version: str,
 ) -> dict[str, object]:
-    files = []
+    files: list[dict[str, object]] = []
     for artifact_path in artifact_paths:
         files.append(
             build_file_artifact(
@@ -79,7 +81,7 @@ def write_manifest(
                 rows=row_counts.get(artifact_path.name),
             ).__dict__
         )
-    manifest = {
+    manifest: dict[str, object] = {
         "dataset_name": "israel-nadlan-data-public-bundle",
         "collector_version": collector_version,
         "generated_at": datetime.now(UTC).isoformat(),
@@ -87,5 +89,7 @@ def write_manifest(
         "source_summary": [source.as_dict() for source in list_sources()],
         "files": files,
     }
-    output_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    output_path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     return manifest

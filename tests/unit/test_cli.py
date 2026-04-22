@@ -5,8 +5,10 @@ import runpy
 from pathlib import Path
 
 import pandas as pd
+import pytest
 from click.testing import CliRunner
 
+from rent_collector import __version__
 from rent_collector.cli import main
 
 
@@ -99,3 +101,87 @@ def test_module_main_invokes_click_entrypoint(monkeypatch) -> None:
         runpy.run_module("rent_collector.cli", run_name="__main__")
     except SystemExit as exc:
         assert exc.code == 0
+
+
+@pytest.mark.parametrize(
+    ("args", "flag"),
+    [
+        (["--probe", "sources", "list"], "--probe"),
+        (["--source", "nadlan", "sources", "list"], "--source"),
+        (["--verbose", "sources", "list"], "--verbose"),
+    ],
+)
+def test_subcommands_reject_top_level_execution_flags(args: list[str], flag: str) -> None:
+    result = CliRunner().invoke(main, args)
+
+    assert result.exit_code != 0
+    assert flag in result.output
+
+
+def test_sources_list_command_prints_registry() -> None:
+    result = CliRunner().invoke(main, ["sources", "list"])
+
+    assert result.exit_code == 0
+    assert "nadlan_gov_il" in result.output
+
+
+def test_build_public_bundle_subcommand_writes_manifest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "rent_collector.cli.build_public_bundle",
+        lambda validate=True: {"collector_version": __version__, "validate": validate},
+    )
+
+    result = CliRunner().invoke(main, ["build-public-bundle"])
+
+    assert result.exit_code == 0
+    assert __version__ in result.output
+
+
+def test_validate_public_bundle_subcommand_handles_success_and_failure(monkeypatch) -> None:
+    monkeypatch.setattr("rent_collector.cli.validate_public_bundle", lambda: [])
+    success = CliRunner().invoke(main, ["validate-public-bundle"])
+    assert success.exit_code == 0
+    assert "validation passed" in success.output.lower()
+
+    monkeypatch.setattr("rent_collector.cli.validate_public_bundle", lambda: ["boom"])
+    failure = CliRunner().invoke(main, ["validate-public-bundle"])
+    assert failure.exit_code != 0
+    assert "boom" in failure.output
+
+
+def test_write_manifest_subcommand_uses_package_version(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("rent_collector.cli.ROOT_DIR", tmp_path)
+    monkeypatch.setattr(
+        "rent_collector.cli.write_source_inventory_csv",
+        lambda path: path.write_text("ok\n", encoding="utf-8"),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _write_manifest(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"collector_version": kwargs["collector_version"]}
+
+    monkeypatch.setattr("rent_collector.cli.write_manifest", _write_manifest)
+
+    result = CliRunner().invoke(main, ["write-manifest"])
+
+    assert result.exit_code == 0
+    assert captured["collector_version"] == __version__
+
+
+def test_full_command_records_unexpected_exceptions(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RENT_COLLECTOR_RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setattr(
+        "rent_collector.pipeline.run_pipeline",
+        lambda **_: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    result = CliRunner().invoke(main, ["--output", str(tmp_path / "out.csv")])
+
+    assert result.exit_code == 1
+    latest = json.loads((tmp_path / "runs" / "latest.json").read_text(encoding="utf-8"))
+    run_dir = Path(latest["latest_run_dir"])
+    run_record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_record["status"] == "failure"
+    assert run_record["error"] == "boom"

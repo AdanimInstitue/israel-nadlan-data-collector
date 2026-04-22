@@ -20,19 +20,20 @@ import click
 from rich.console import Console
 from rich.logging import RichHandler
 
+from rent_collector import __version__
 from rent_collector.config import (
     LOCALITY_CROSSWALK_CSV,
     RENT_BENCHMARKS_CSV,
     ROOT_DIR,
     RUN_ARTIFACTS_DIR,
 )
+from rent_collector.pipeline import ValidationFailedError
+from rent_collector.provenance import write_manifest, write_source_inventory_csv
 from rent_collector.public_bundle import (
     PUBLIC_MANIFEST_JSON,
     build_public_bundle,
     validate_public_bundle,
 )
-from rent_collector.pipeline import ValidationFailedError
-from rent_collector.provenance import write_manifest, write_source_inventory_csv
 from rent_collector.source_registry import list_sources
 
 console = Console()
@@ -166,6 +167,40 @@ def _setup_logging(verbose: bool) -> None:
     )
 
 
+def _subcommand_conflicting_options(
+    *,
+    source: tuple[str, ...],
+    dry_run: bool,
+    probe: bool,
+    scan_catalog: bool,
+    validate: bool,
+    expected_total_2022: float | None,
+    output: str,
+    run_dir: Path | None,
+    verbose: bool,
+) -> list[str]:
+    conflicts: list[str] = []
+    if source:
+        conflicts.append("--source")
+    if dry_run:
+        conflicts.append("--dry-run")
+    if probe:
+        conflicts.append("--probe")
+    if scan_catalog:
+        conflicts.append("--scan-catalog")
+    if validate:
+        conflicts.append("--validate")
+    if expected_total_2022 is not None:
+        conflicts.append("--expected-total-2022")
+    if output != str(RENT_BENCHMARKS_CSV):
+        conflicts.append("--output")
+    if run_dir is not None:
+        conflicts.append("--run-dir")
+    if verbose:
+        conflicts.append("--verbose")
+    return conflicts
+
+
 @click.group(invoke_without_command=True)
 @click.option(
     "--source",
@@ -229,17 +264,22 @@ def main(
 ) -> None:
     """Collect and package public-safe Israeli rent benchmarks."""
     if ctx.invoked_subcommand is not None:
-        ctx.obj = {
-            "source": source,
-            "dry_run": dry_run,
-            "probe": probe,
-            "scan_catalog": scan_catalog,
-            "validate": validate,
-            "expected_total_2022": expected_total_2022,
-            "output": output,
-            "run_dir": run_dir,
-            "verbose": verbose,
-        }
+        conflicts = _subcommand_conflicting_options(
+            source=source,
+            dry_run=dry_run,
+            probe=probe,
+            scan_catalog=scan_catalog,
+            validate=validate,
+            expected_total_2022=expected_total_2022,
+            output=output,
+            run_dir=run_dir,
+            verbose=verbose,
+        )
+        if conflicts:
+            raise click.UsageError(
+                "Top-level execution options cannot be combined with subcommands: "
+                + ", ".join(conflicts)
+            )
         return
 
     output_path = Path(output)
@@ -352,7 +392,7 @@ def write_manifest_command() -> None:
         output_path=bundle_dir / "manifest.json",
         artifact_paths=[bundle_dir / "source_inventory.csv"],
         row_counts={"source_inventory.csv": len(list_sources())},
-        collector_version="0.2.0",
+        collector_version=__version__,
     )
     console.print(json.dumps(manifest, indent=2, ensure_ascii=False))
 
