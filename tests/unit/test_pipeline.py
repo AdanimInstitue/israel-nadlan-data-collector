@@ -183,3 +183,20 @@ def test_validate_crosswalk_rejects_empty_blank_and_non_numeric_codes() -> None:
                 ]
             )
         )
+
+    with pytest.raises(ValidationFailedError, match="blank locality_code"):
+        _validate_crosswalk(
+            pd.DataFrame(
+                [
+                    {
+                        "locality_code": "   ",
+                        "locality_name_he": "תל אביב - יפו",
+                        "locality_name_en": "",
+                        "district_he": "תל אביב",
+                        "district_en": "Tel Aviv",
+                        "population_approx": None,
+                        "source": "data.gov.il",
+                    }
+                ]
+            )
+        )
