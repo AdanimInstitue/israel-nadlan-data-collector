@@ -10,9 +10,9 @@ from rent_collector.collectors.data_gov_il import (
     ckan_organization_datasets,
     ckan_package_search,
 )
+from rent_collector.models import Locality
 from rent_collector.utils import locality_crosswalk as lc
 from rent_collector.utils.locality_crosswalk import LocalityCrosswalk
-from rent_collector.models import Locality
 
 
 class _Client:
