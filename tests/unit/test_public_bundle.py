@@ -4,9 +4,14 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from rent_collector import __version__
-from rent_collector.provenance import write_manifest, write_source_inventory_csv
+from rent_collector.provenance import (
+    build_file_artifact,
+    write_manifest,
+    write_source_inventory_csv,
+)
 from rent_collector.public_bundle import build_public_bundle, validate_public_bundle
 
 
@@ -102,3 +107,61 @@ def test_validate_public_bundle_rejects_absolute_and_escaping_paths(tmp_path: Pa
     errors = validate_public_bundle(bundle_dir, root_dir=tmp_path)
     assert "path escaped bundle root: ../outside.csv" in errors
     assert "absolute path leaked into manifest: /absolute/path.csv" in errors
+
+
+def test_validate_public_bundle_rejects_non_object_manifest(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "custom_bundle"
+    bundle_dir.mkdir()
+    (bundle_dir / "manifest.json").write_text('["not", "an", "object"]', encoding="utf-8")
+
+    assert validate_public_bundle(bundle_dir) == ["manifest.json must contain a top-level object"]
+
+
+def test_validate_public_bundle_rejects_non_list_files_field(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "custom_bundle"
+    bundle_dir.mkdir()
+    (bundle_dir / "manifest.json").write_text(json.dumps({"files": {}}), encoding="utf-8")
+
+    assert validate_public_bundle(bundle_dir) == ["manifest.json field 'files' must be a list"]
+
+
+def test_validate_public_bundle_reports_entry_shape_bundle_escape_and_missing_file(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = tmp_path / "custom_bundle"
+    sibling_dir = tmp_path / "sibling"
+    bundle_dir.mkdir()
+    sibling_dir.mkdir()
+    (sibling_dir / "outside.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "source_inventory.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "locality_crosswalk.csv").write_text("col\n1\n", encoding="utf-8")
+    (bundle_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "files": [
+                    {},
+                    {"relative_path": "sibling/outside.csv"},
+                    {"relative_path": "custom_bundle/missing.csv"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = validate_public_bundle(bundle_dir, root_dir=tmp_path)
+
+    assert "manifest.json contains a file entry without relative_path" in errors
+    assert "path escaped bundle directory: sibling/outside.csv" in errors
+    assert "missing bundle file: custom_bundle/missing.csv" in errors
+
+
+def test_build_file_artifact_rejects_paths_outside_root(tmp_path: Path) -> None:
+    root_dir = tmp_path / "root"
+    outside_dir = tmp_path / "outside"
+    root_dir.mkdir()
+    outside_dir.mkdir()
+    outside_file = outside_dir / "artifact.csv"
+    outside_file.write_text("a\n1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="outside the root directory"):
+        build_file_artifact(root_dir, outside_file)

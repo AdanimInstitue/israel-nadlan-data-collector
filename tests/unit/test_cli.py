@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import runpy
+import subprocess
 from pathlib import Path
 
 import click
@@ -9,7 +10,7 @@ import pandas as pd
 from click.testing import CliRunner
 
 from rent_collector import __version__
-from rent_collector.cli import main
+from rent_collector.cli import _git_sha, _update_latest_pointers, main
 from rent_collector.config import LOCALITY_CROSSWALK_CSV
 
 
@@ -190,3 +191,62 @@ def test_csv_row_count_handles_missing_and_existing_files(tmp_path) -> None:
     csv_path = tmp_path / "rows.csv"
     csv_path.write_text("a\n1\n2\n", encoding="utf-8")
     assert _csv_row_count(csv_path) == 2
+
+
+def test_git_sha_returns_none_when_git_command_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "rent_collector.cli.subprocess.run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(subprocess.CalledProcessError(1, "git")),
+    )
+    assert _git_sha() is None
+
+
+def test_update_latest_pointers_ignores_symlink_failures(monkeypatch, tmp_path) -> None:
+    run_dir = tmp_path / "run-001"
+    run_dir.mkdir()
+    monkeypatch.setattr(
+        Path,
+        "symlink_to",
+        lambda self, *args, **kwargs: (_ for _ in ()).throw(OSError("no symlink")),
+    )
+
+    _update_latest_pointers(tmp_path, run_dir)
+
+    latest = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
+    assert latest["latest_run_dir"] == str(run_dir)
+
+
+def test_subcommands_reject_all_top_level_execution_flags(tmp_path) -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "--dry-run",
+            "--probe",
+            "--validate",
+            "--run-dir",
+            str(tmp_path / "runs"),
+            "--verbose",
+            "sources",
+            "list",
+        ],
+    )
+    assert result.exit_code != 0
+    for flag in ["--dry-run", "--probe", "--validate", "--run-dir", "--verbose"]:
+        assert flag in result.output
+
+
+def test_cli_uses_explicit_run_dir(monkeypatch, tmp_path) -> None:
+    run_dir = tmp_path / "custom-run-dir"
+    monkeypatch.setattr(
+        "rent_collector.pipeline.run_pipeline",
+        lambda **_: pd.DataFrame([{"locality_code": "5000", "source": "data.gov.il"}]),
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["--run-dir", str(run_dir), "--output", str(tmp_path / "out.csv")],
+    )
+
+    assert result.exit_code == 0
+    assert run_dir.exists()
+    assert (run_dir / "run.json").exists()

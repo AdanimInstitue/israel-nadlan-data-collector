@@ -31,6 +31,19 @@ def test_run_pipeline_writes_locality_crosswalk(monkeypatch, tmp_path) -> None:
     assert output_path.exists()
 
 
+def test_run_pipeline_writes_without_validation(monkeypatch, tmp_path) -> None:
+    crosswalk = LocalityCrosswalk(
+        [Locality(code="5000", name_he="תל אביב - יפו", district_he="תל אביב")]
+    )
+    monkeypatch.setattr("rent_collector.pipeline.get_crosswalk", lambda: crosswalk)
+    output_path = tmp_path / "locality_crosswalk.csv"
+
+    df = run_pipeline(output_path=output_path)
+
+    assert list(df["locality_code"]) == ["5000"]
+    assert output_path.exists()
+
+
 def test_run_pipeline_dry_run_returns_empty(monkeypatch) -> None:
     monkeypatch.setattr(
         "rent_collector.pipeline.probe_all",
