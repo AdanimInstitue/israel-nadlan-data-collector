@@ -235,7 +235,7 @@ jobs:
       )
     uses: shaypal5/pr-agent-context/.github/workflows/pr-agent-context.yml@v4
     with:
-      tool_ref: v4.0.19
+      tool_ref: v4
       execution_mode: refresh
       trigger_event_name_override: ${{ github.event.inputs.trigger_event_name || '' }}
       trigger_event_action_override: ${{ github.event.inputs.trigger_event_action || '' }}

@@ -24,4 +24,4 @@ indc build-public-bundle
 indc validate-public-bundle
 ```
 
-`pr-agent-context` must stay on floating `@v4` in workflow `uses:` lines. Do not replace it with a SHA or exact `v4.x.y` tag.
+`pr-agent-context` must stay on floating `v4` in both workflow `uses:` refs and `tool_ref`. Do not replace either with a SHA or exact `v4.x.y` tag.
