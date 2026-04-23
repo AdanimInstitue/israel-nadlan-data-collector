@@ -5,6 +5,7 @@ import runpy
 from pathlib import Path
 
 import pandas as pd
+import click
 from click.testing import CliRunner
 
 from rent_collector import __version__
@@ -162,6 +163,23 @@ def test_full_command_records_unexpected_exceptions(monkeypatch, tmp_path) -> No
     run_record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_record["status"] == "failure"
     assert run_record["error"] == "boom"
+
+
+def test_full_command_records_click_exceptions(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RENT_COLLECTOR_RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setattr(
+        "rent_collector.pipeline.run_pipeline",
+        lambda **_: (_ for _ in ()).throw(click.ClickException("usage failed")),
+    )
+
+    result = CliRunner().invoke(main, ["--output", str(tmp_path / "out.csv")])
+
+    assert result.exit_code == 1
+    latest = json.loads((tmp_path / "runs" / "latest.json").read_text(encoding="utf-8"))
+    run_dir = Path(latest["latest_run_dir"])
+    run_record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_record["status"] == "failure"
+    assert run_record["error"] == "usage failed"
 
 
 def test_csv_row_count_handles_missing_and_existing_files(tmp_path) -> None:
