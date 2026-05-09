@@ -1,4 +1,4 @@
-Repository: `AdanimInstitue/israel-nadlan-data-collector`
+Repository: `AdanimInstitute/israel-nadlan-data-collector`
 
 This repository is a public collector. Prioritize:
 - public-safe scope and wording
